@@ -1,0 +1,47 @@
+[build-system]
+requires = ["maturin>=1.7.4"]
+build-backend = "maturin"
+
+[project]
+name = "e-loader"
+version = "0.1.0"
+description = "Fast, type-safe structured data loader with pluggable codecs."
+readme = "README.md"
+license = "MIT"
+authors = [
+    { name = "Damien", email = "damien@example.com" },
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+]
+dependencies = [
+    "orjson>=3.10.0",
+    "rtoml>=0.12.0",
+    "PyYAML>=6.0.1",
+    "tomli-w>=1.0.0",
+    "plum-dispatch>=2.3.0",
+    "aiofiles>=25.1.0",
+]
+requires-python = ">=3.13"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "ruff>=0.9.0",
+    "ty>=0.1.1",
+]
+
+[project.urls]
+repository = "https://github.com/test/e-loader"
+documentation = "https://github.com/test/e-loader"
+
+[project.scripts]
+e-loader = "e_loader.main:main"
+
+[tool.maturin]
+module-name = "e_loader._rust"

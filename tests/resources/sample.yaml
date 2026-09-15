@@ -1,0 +1,41 @@
+name: test-project
+version: 1.0.0
+description: Sample YAML configuration
+author: Test User
+license: MIT
+dependencies:
+  express: ^4.18.0
+  lodash: ^4.17.21
+scripts:
+  start: node index.js
+  test: jest
+keywords:
+  - sample
+  - test
+repository:
+  type: git
+  url: https://github.com/test/sample.git
+bugs:
+  url: https://github.com/test/sample/issues
+homepage: https://github.com/test/sample#readme
+metadata:
+  created: "2023-01-01"
+  tags:
+    - sample
+    - test
+database:
+  host: localhost
+  port: 5432
+  ssl: true
+  credentials:
+    username: admin
+    password: secret
+features:
+  enabled:
+    - auth
+    - logging
+    - monitoring
+logging:
+  level: info
+  file: /var/log/app.log
+  max_size: 100MB

@@ -1,0 +1,41 @@
+name = "test-project"
+version = "1.0.0"
+description = "Sample TOML configuration"
+authors = ["Test User <test@example.com>"]
+license = "MIT"
+
+[dependencies]
+express = "^4.18.0"
+lodash = "^4.17.21"
+
+[dev-dependencies]
+jest = "^29.0.0"
+
+[scripts]
+start = "node index.js"
+test = "jest"
+
+[metadata]
+created = "2023-01-01"
+tags = ["sample", "test"]
+
+[database]
+host = "localhost"
+port = 5432
+ssl = true
+
+[database.credentials]
+username = "admin"
+password = "secret"
+
+[features]
+enabled = [
+  "auth",
+  "logging",
+  "monitoring"
+]
+
+[logging]
+level = "info"
+file = "/var/log/app.log"
+max_size = "100MB"

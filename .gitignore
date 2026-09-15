@@ -216,3 +216,19 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Rust / Cargo
+target/
+Cargo.lock.bak
+
+# maturin
+*.so
+*.pyd
+*.dylib
+wheels/
+
+# uv
+.venv/
+
+# ty
+.ty_cache/
