@@ -1,0 +1,56 @@
+#  ┌──────────────────────────────────────────────────────────────────────────┐
+#  │  tach · architectural import contracts (Rust-backed)                       │
+#  │  subordinate to pyproject.toml — tach does not read [tool.tach] from it     │
+#  │  bootstrap: `tach mod` → `tach sync` · CI: `tach check` (make arch)         │
+#  └──────────────────────────────────────────────────────────────────────────┘
+
+# Roots from which Python imports resolve, relative to project root.
+source_roots = ["src"]
+
+# Glob paths skipped during checking (matched from the path start).
+exclude = ["tests", "docs"]
+
+# Fail check if any circular dependency exists between modules.
+forbid_circular_dependencies = true
+
+# Fail check if a declared depends_on is never actually imported.
+exact = true
+
+# Strictest: every file must belong to a declared module, no loose root code.
+root_module = "forbid"
+
+# Per-issue severity overrides ("error" | "warn" | "off").
+[rules]
+unused_ignore_directives = "error"
+
+# Layering: e_serde <- logic <- backends <- infra/_native ; msgspec is the single external engine dep.
+[[modules]]
+path = "e_serde"
+depends_on = ["e_serde.backends", "e_serde.infra", "e_serde.logic"]
+
+[[modules]]
+path = "e_serde._native"
+depends_on = []
+
+[[modules]]
+path = "e_serde.infra"
+depends_on = []
+
+[[modules]]
+path = "e_serde.backends"
+depends_on = ["e_serde._native", "e_serde.infra"]
+
+[[modules]]
+path = "e_serde.logic"
+depends_on = ["e_serde.backends", "e_serde.infra"]
+
+# Layers (optional) — ordered high → low. A layer may import lower layers
+# freely; importing a higher layer fails. Assign via `layer` on each module.
+# layers = ["api", "pipelines", "adapters", "models", "core"]
+
+# Interfaces (optional) — restrict a module's public surface.
+#   expose   regex patterns of names other modules may import
+#   from     regex patterns of modules that adopt this interface
+# [[interfaces]]
+# from = ["e_api.core"]
+# expose = ["^settings$", "^logger$"]

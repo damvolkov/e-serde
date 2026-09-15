@@ -1,47 +1,132 @@
 [build-system]
-requires = ["maturin>=1.7.4"]
+requires = ["maturin>=1.10"]
 build-backend = "maturin"
 
 [project]
-name = "e-loader"
-version = "0.1.0"
-description = "Fast, type-safe structured data loader with pluggable codecs."
+name = "e-serde"
+dynamic = ["version"]
+description = "Fast, type-safe structured data loader: native Rust codecs with pluggable backends."
 readme = "README.md"
+requires-python = ">=3.14"
 license = "MIT"
-authors = [
-    { name = "Damien", email = "damien@example.com" },
-]
+license-files = ["LICEN[CS]E*"]
+authors = [{ name = "damvolkov", email = "damvolkovv@gmail.com" }]
+keywords = ["e-stack", "config", "yaml", "toml", "jsonc", "ini", "msgspec"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.14",
+    "Typing :: Typed",
 ]
 dependencies = [
-    "orjson>=3.10.0",
-    "rtoml>=0.12.0",
-    "PyYAML>=6.0.1",
-    "tomli-w>=1.0.0",
-    "plum-dispatch>=2.3.0",
-    "aiofiles>=25.1.0",
-]
-requires-python = ">=3.13"
-
-[project.optional-dependencies]
-dev = [
-    "pytest>=8.0.0",
-    "pytest-asyncio>=0.23.0",
-    "ruff>=0.9.0",
-    "ty>=0.1.1",
+    "msgspec>=0.21",
 ]
 
 [project.urls]
-repository = "https://github.com/test/e-loader"
-documentation = "https://github.com/test/e-loader"
+Homepage = "https://github.com/damvolkov/e-serde"
 
 [project.scripts]
-e-loader = "e_loader.main:main"
+e-serde = "e_serde.main:main"
+
+[dependency-groups]
+lint = [
+    "ruff>=0.16",
+    "ty>=0.0.75",
+    "tach>=0.30",
+    "validate-pyproject[all]>=0.26",
+    "zizmor>=1.25",
+]
+test = [
+    "pytest>=9.1",
+    "pytest-asyncio>=1.4",
+    "pytest-cov>=7.1",
+    "pytest-xdist[psutil]>=3.8",
+    "pytest-randomly>=5.0",
+    "pytest-timeout>=2.4",
+    "pytest-mock>=3.15",
+    "inline-snapshot>=0.30",
+    "dirty-equals>=0.11",
+    "hypothesis>=6.150",
+]
+build = [
+    "maturin>=1.10",
+]
+dev = [
+    { include-group = "lint" },
+    { include-group = "test" },
+    { include-group = "build" },
+    "prek>=0.4",
+]
+
+[tool.uv]
+required-version = ">=0.12"
+default-groups = ["dev"]
+exclude-newer = "7 days"
+cache-keys = [{ file = "pyproject.toml" }, { file = "Cargo.toml" }, { file = "Cargo.lock" }, { git = { commit = true, tags = true } }]
 
 [tool.maturin]
-module-name = "e_loader._rust"
+manifest-path = "crates/native/Cargo.toml"
+module-name = "e_serde._native"
+python-source = "src"
+features = ["pyo3/extension-module"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py314"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "F", "E", "W", "I", "N", "UP", "B", "A", "C4", "DTZ", "T10", "T20", "EM", "ISC",
+    "PIE", "PT", "RET", "SIM", "TID", "TC", "ARG", "PTH", "PL", "PERF", "FURB",
+    "ASYNC", "S", "BLE", "FBT", "LOG", "G", "RUF",
+]
+ignore = ["E501", "ISC001", "PLR0913"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "PLR2004", "ARG", "FBT"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["e_serde"]
+
+[tool.ruff.lint.flake8-builtins]
+ignorelist = ["format", "type"]  # `format=`/`type=` are the intentional keyword-only public API
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[tool.ruff.format]
+docstring-code-format = true
+
+[tool.ty.environment]
+python-version = "3.14"
+
+[tool.ty.src]
+include = ["src", "tests"]
+
+[tool.ty.terminal]
+error-on-warning = true
+
+[tool.pytest]
+minversion = "9.0"
+testpaths = ["tests"]
+addopts = ["--import-mode=importlib", "-ra"]
+strict = true
+filterwarnings = ["error"]
+timeout = "60"
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+markers = ["slow: slow tests (deselect with -m 'not slow')"]
+
+[tool.coverage.run]
+source_pkgs = ["e_serde"]
+branch = true
+parallel = true
+
+[tool.coverage.report]
+fail_under = 90
+show_missing = true
+skip_covered = true
+exclude_also = ["if TYPE_CHECKING:", "@overload", "raise NotImplementedError", '^\s*\.\.\.$']

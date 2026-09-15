@@ -1,31 +1,34 @@
-.PHONY: build-native build-yaml build-toml build-ini clean test
+.PHONY: build test lint format types arch check cargo-fmt clean release
 
-build-native:
-	@echo "Building all native crates..."
-	cargo build --release -p e-loader-yaml -p e-loader-toml -p e-loader-ini
+build:            ## compile native extension into the venv (debug)
+	uv run maturin develop
 
-build-yaml:
-	@echo "Building YAML crate..."
-	cargo build --release -p e-loader-yaml
+build-release:    ## compile native extension with optimizations
+	uv run maturin develop --release
 
-build-toml:
-	@echo "Building TOML crate..."
-	cargo build --release -p e-loader-toml
+test:             ## run unit tests
+	uv run pytest
 
-build-ini:
-	@echo "Building INI crate..."
-	cargo build --release -p e-loader-ini
+lint:             ## ruff check (auto-fix)
+	uv run ruff check --fix src tests
 
-clean:
-	@echo "Cleaning builds..."
+format:           ## ruff format
+	uv run ruff format src tests
+
+types:            ## static type checking
+	uv run ty check
+
+arch:             ## enforce import boundaries
+	uv run tach check
+
+check: lint format types arch test   ## everything CI runs
+
+cargo-fmt:        ## format rust sources
+	cargo fmt --all
+
+clean:            ## remove build artifacts
 	cargo clean
-	find . -name "*.pyc" -delete
-	find . -name "__pycache__" -type d -exec rm -rf {} +
+	rm -rf .pytest_cache .ruff_cache .coverage src/e_serde/__pycache__
 
-test:
-	@echo "Running all tests..."
-	pytest tests/
-
-test-native:
-	@echo "Running native codec tests..."
-	pytest tests/unit/crates/
+release:          ## build distributable wheel
+	uv run maturin build --release
