@@ -23,6 +23,8 @@ jobs:
         with:
           command: release
         env:
-          # A Personal Access Token (classic, or fine-grained with contents+PRs
-          # write) so the merge cascades `on: release` into publish.yml.
-          GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
+          # With the PAT secret, the merge cascades the v* tag into publish.yml.
+          # Without it, the fallback still opens the bump PR, tags and releases;
+          # the tag push just won't trigger workflows (GitHub limitation) — publish
+          # it manually from Actions if that happens.
+          GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN || github.token }}

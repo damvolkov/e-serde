@@ -3,6 +3,7 @@ name: Publish
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch: # manual escape hatch: choose the v* tag from the Actions UI
 
 permissions:
   contents: read
