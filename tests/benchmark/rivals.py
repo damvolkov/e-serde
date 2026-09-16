@@ -27,8 +27,8 @@ import ujson
 import yaml
 from ruamel.yaml import YAML
 
-import e_serde
-from e_serde import Format
+import eserde
+from eserde import Format
 from tests.benchmark.models import PYDANTIC, Config, DCConfig
 
 type Decode = Callable[[bytes], Any]
@@ -39,15 +39,15 @@ _RUAMEL_RW = YAML()
 
 
 def _serde_loads(fmt: Format) -> Decode:
-    return lambda data: e_serde.loads(data, format=fmt)
+    return lambda data: eserde.loads(data, format=fmt)
 
 
 def _serde_dumps(fmt: Format) -> Encode:
-    return lambda obj: e_serde.dumps(obj, format=fmt)
+    return lambda obj: eserde.dumps(obj, format=fmt)
 
 
 def _serde_typed(fmt: Format, schema: Any) -> Decode:
-    return lambda data: e_serde.loads(data, format=fmt, type=schema)
+    return lambda data: eserde.loads(data, format=fmt, type=schema)
 
 
 def _str_loads(fn: Callable[[str], Any]) -> Decode:

@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any
 import rtoml
 import yaml
 
-from e_serde import Format
+from eserde import Format
 
 if TYPE_CHECKING:
     from collections.abc import Callable

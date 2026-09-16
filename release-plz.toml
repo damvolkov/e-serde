@@ -1,0 +1,40 @@
+#  ┌──────────────────────────────────────────────────────────────────────────┐
+#  │  release-plz · conventional commits → bump PR → vX.Y.Z tag + release      │
+#  │  Cargo.toml [workspace.package].version is the single source of truth;     │
+#  │  maturin derives the wheel version (SemVer → PEP 440) from the crate.      │
+#  │  Flow: merge bump PR → tag triggers .github/workflows/publish.yml (PyPI).  │
+#  └──────────────────────────────────────────────────────────────────────────┘
+
+[workspace]
+# The native crate is a cdylib for the wheel: never `cargo publish` to crates.io.
+publish = false
+git_tag_name = "v{{ version }}"
+git_release_name = "e-serde v{{ version }}"
+git_release_type = "auto"
+
+[changelog]
+
+[[changelog.commit_parsers]]
+message = "^feat"
+group = "Features"
+
+[[changelog.commit_parsers]]
+message = "^fix"
+group = "Fixes"
+
+[[changelog.commit_parsers]]
+message = "^perf"
+group = "Performance"
+
+[[changelog.commit_parsers]]
+message = "^refactor"
+group = "Refactoring"
+
+[[changelog.commit_parsers]]
+message = "^(build|ci|chore|style|test|docs)"
+skip = true
+
+[[package]]
+name = "e-serde-native"
+# Keep the changelog at the repo root, not in crates/native/.
+changelog_path = "CHANGELOG.md"

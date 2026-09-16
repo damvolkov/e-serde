@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from e_serde import Format
+from eserde import Format
 from tests.benchmark.payloads import payload, sizes
 from tests.benchmark.rivals import DUMP_RIVALS, LOAD_RIVALS, TYPED_RIVALS
 

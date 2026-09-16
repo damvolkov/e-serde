@@ -1,0 +1,28 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-plz:
+    name: Bump PR + tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0
+          # release-plz pushes with its own token; checkout must not persist the default one.
+          persist-credentials: false
+      - name: Generate release pull request (merge it to tag v0.1.1, v0.2.0, ...)
+        uses: release-plz/action@c18510d384e6f6d444fc5c051838e6adceb6c8c0  # v0.5.137
+        with:
+          command: release
+        env:
+          # A Personal Access Token (classic, or fine-grained with contents+PRs
+          # write) so the merge cascades `on: release` into publish.yml.
+          GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}

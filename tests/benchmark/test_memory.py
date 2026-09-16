@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from e_serde import Format
+from eserde import Format
 from tests.benchmark.payloads import payload
 from tests.benchmark.rivals import LOAD_RIVALS
 

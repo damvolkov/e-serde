@@ -23,26 +23,26 @@ root_module = "forbid"
 [rules]
 unused_ignore_directives = "error"
 
-# Layering: e_serde <- logic <- backends <- infra/_native ; msgspec is the single external engine dep.
+# Layering: eserde <- logic <- backends <- infra/_native ; msgspec is the single external engine dep.
 [[modules]]
-path = "e_serde"
-depends_on = ["e_serde.backends", "e_serde.infra", "e_serde.logic"]
+path = "eserde"
+depends_on = ["eserde.backends", "eserde.infra", "eserde.logic"]
 
 [[modules]]
-path = "e_serde._native"
+path = "eserde._native"
 depends_on = []
 
 [[modules]]
-path = "e_serde.infra"
+path = "eserde.infra"
 depends_on = []
 
 [[modules]]
-path = "e_serde.backends"
-depends_on = ["e_serde._native", "e_serde.infra"]
+path = "eserde.backends"
+depends_on = ["eserde._native", "eserde.infra"]
 
 [[modules]]
-path = "e_serde.logic"
-depends_on = ["e_serde.backends", "e_serde.infra"]
+path = "eserde.logic"
+depends_on = ["eserde.backends", "eserde.infra"]
 
 # Layers (optional) — ordered high → low. A layer may import lower layers
 # freely; importing a higher layer fails. Assign via `layer` on each module.

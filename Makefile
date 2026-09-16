@@ -1,4 +1,4 @@
-.PHONY: build test lint format types arch check cargo-fmt clean release bench build-release
+.PHONY: build build-release test lint format types arch check cargo-fmt clean release bench docs docs-serve
 
 build:            ## compile native extension into the venv (debug)
 	uv run maturin develop
@@ -28,13 +28,21 @@ cargo-fmt:        ## format rust sources
 
 clean:            ## remove build artifacts
 	cargo clean
-	rm -rf .pytest_cache .ruff_cache .coverage src/e_serde/__pycache__
+	rm -rf .pytest_cache .ruff_cache .coverage site src/eserde/__pycache__
 
 release:          ## build distributable wheel
 	uv run maturin build --release
 
-bench: build-release ## run the rival benchmark matrix and render charts + markdown report
+bench: build-release ## rival benchmark matrix → charts in assets/benchmarks
 	mkdir -p .benchmark
 	uv run pytest tests/benchmark -m bench -p no:randomly \
 		--benchmark-json=.benchmark/bench.json --benchmark-min-rounds=5 --benchmark-max-time=0.5 -q
 	uv run python tests/benchmark/report.py .benchmark/bench.json .benchmark
+	cp .benchmark/*.png assets/benchmarks/
+	rm -rf .benchmark
+
+docs-serve:       ## serve the documentation locally
+	uv run --group docs mkdocs serve -a 127.0.0.1:8000
+
+docs:             ## build the documentation (strict, fails on broken links)
+	uv run --group docs mkdocs build --strict

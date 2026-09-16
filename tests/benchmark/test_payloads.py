@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from e_serde import Format
+from eserde import Format
 from tests.benchmark.payloads import payload, source_tree
 from tests.benchmark.rivals import DUMP_RIVALS, LOAD_RIVALS
 

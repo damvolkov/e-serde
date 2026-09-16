@@ -13,8 +13,8 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-import e_serde
-from e_serde import Format
+import eserde
+from eserde import Format
 from tests.benchmark.payloads import payload
 
 if TYPE_CHECKING:
@@ -29,28 +29,28 @@ type Drive = Callable[[Format, str, Files], list[Any]]
 
 def _loads_bytes(fmt: Format, size: str, _files: Files) -> list[Any]:
     data = payload(fmt, size)
-    return [e_serde.loads(data, format=fmt) for _ in range(_WORKERS)]
+    return [eserde.loads(data, format=fmt) for _ in range(_WORKERS)]
 
 
 def _aloads_bytes(fmt: Format, size: str, _files: Files) -> list[Any]:
     data = payload(fmt, size)
 
     async def _gather() -> list[Any]:
-        return list(await asyncio.gather(*(e_serde.aloads(data, format=fmt) for _ in range(_WORKERS))))
+        return list(await asyncio.gather(*(eserde.aloads(data, format=fmt) for _ in range(_WORKERS))))
 
     return asyncio.run(_gather())
 
 
 def _loads_file(fmt: Format, size: str, files: Files) -> list[Any]:
     path = files[fmt.value, size]
-    return [e_serde.load(path) for _ in range(_WORKERS)]
+    return [eserde.load(path) for _ in range(_WORKERS)]
 
 
 def _aloads_file(fmt: Format, size: str, files: Files) -> list[Any]:
     path = files[fmt.value, size]
 
     async def _gather() -> list[Any]:
-        return list(await asyncio.gather(*(e_serde.aload(path) for _ in range(_WORKERS))))
+        return list(await asyncio.gather(*(eserde.aload(path) for _ in range(_WORKERS))))
 
     return asyncio.run(_gather())
 
