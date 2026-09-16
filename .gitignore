@@ -232,3 +232,6 @@ wheels/
 
 # ty
 .ty_cache/
+# e-serde: benchmark artifacts
+.benchmark/
+.benchmarks/

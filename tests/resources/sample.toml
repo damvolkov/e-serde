@@ -1,41 +1,114 @@
-name = "test-project"
-version = "1.0.0"
-description = "Sample TOML configuration"
-authors = ["Test User <test@example.com>"]
-license = "MIT"
+[[entries]]
+id = "svc-000000"
+name = "worker-0"
+endpoint = "https://api-0.internal.example/v1/resource"
+weight = 0.0
+retries = 0
+enabled = false
+role = "admin"
+tags = ["tag-0", "zone-0", "bench"]
 
-[dependencies]
-express = "^4.18.0"
-lodash = "^4.17.21"
+[entries.limits]
+cpu = 1
+memory_mb = 256
+timeout_ms = 500
 
-[dev-dependencies]
-jest = "^29.0.0"
+[entries.owner]
+team = "team-0"
+email = "owner0@example.org"
 
-[scripts]
-start = "node index.js"
-test = "jest"
+[entries.headers]
+x-request-id = "req-00000000"
+accept-encoding = "gzip, deflate, br"
+user-agent = "e-serde-bench/1.0"
 
-[metadata]
-created = "2023-01-01"
-tags = ["sample", "test"]
+[[entries]]
+id = "svc-000001"
+name = "worker-1"
+endpoint = "https://api-1.internal.example/v1/resource"
+weight = 0.25
+retries = 1
+enabled = true
+role = "editor"
+tags = ["tag-1", "zone-1", "bench"]
 
-[database]
-host = "localhost"
-port = 5432
-ssl = true
+[entries.limits]
+cpu = 2
+memory_mb = 512
+timeout_ms = 501
 
-[database.credentials]
-username = "admin"
-password = "secret"
+[entries.owner]
+team = "team-1"
+email = "owner1@example.org"
 
-[features]
-enabled = [
-  "auth",
-  "logging",
-  "monitoring"
-]
+[entries.headers]
+x-request-id = "req-00000001"
+accept-encoding = "gzip, deflate, br"
+user-agent = "e-serde-bench/1.0"
 
-[logging]
-level = "info"
-file = "/var/log/app.log"
-max_size = "100MB"
+[[entries]]
+id = "svc-000002"
+name = "worker-2"
+endpoint = "https://api-2.internal.example/v1/resource"
+weight = 0.5
+retries = 2
+enabled = true
+role = "viewer"
+tags = ["tag-2", "zone-2", "bench"]
+
+[entries.limits]
+cpu = 3
+memory_mb = 768
+timeout_ms = 502
+
+[entries.owner]
+team = "team-2"
+email = "owner2@example.org"
+
+[entries.headers]
+x-request-id = "req-00000002"
+accept-encoding = "gzip, deflate, br"
+user-agent = "e-serde-bench/1.0"
+
+[meta]
+project = "e-serde"
+stage = "bench"
+revision = 7
+sample_rate = 0.15
+strict = true
+
+[settings]
+region = "eu-west-1"
+log_level = "info"
+drain_sec = 30
+flags = ["beta-routing", "serde-v2"]
+
+[types]
+string = "plain"
+empty_string = ""
+int = -42
+bigint = 9007199254740991
+float = 3.5
+float_int = 2.0
+float_pi = 3.141592653589793
+bool = true
+bool_false = false
+unicode = "Málaga ñ 日本語 ✓"
+numeric_string = "123"
+boolean_string = "true"
+octal_string = "0755"
+date_like = "2024-01-15"
+url = "https://example.com/a?b=c#d"
+empty_array = []
+array_of_scalars = [1, "two", 3.0, true]
+
+[[types.array_of_objects]]
+k = 1
+
+[[types.array_of_objects]]
+k = 2
+
+[types.empty_object]
+[types.nested.level1.level2]
+leaf = 0.25
+branch = ["deep", "wider"]

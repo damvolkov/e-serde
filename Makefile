@@ -1,4 +1,4 @@
-.PHONY: build test lint format types arch check cargo-fmt clean release
+.PHONY: build test lint format types arch check cargo-fmt clean release bench build-release
 
 build:            ## compile native extension into the venv (debug)
 	uv run maturin develop
@@ -32,3 +32,9 @@ clean:            ## remove build artifacts
 
 release:          ## build distributable wheel
 	uv run maturin build --release
+
+bench: build-release ## run the rival benchmark matrix and render charts + markdown report
+	mkdir -p .benchmark
+	uv run pytest tests/benchmark -m bench -p no:randomly \
+		--benchmark-json=.benchmark/bench.json --benchmark-min-rounds=5 --benchmark-max-time=0.5 -q
+	uv run python tests/benchmark/report.py .benchmark/bench.json .benchmark

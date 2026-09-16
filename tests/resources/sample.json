@@ -1,27 +1,83 @@
 {
-  "name": "test-project",
-  "version": "1.0.0",
-  "description": "Sample JSON configuration",
-  "author": "Test User",
-  "license": "MIT",
-  "dependencies": {
-    "express": "^4.18.0",
-    "lodash": "^4.17.21"
+  "meta": {
+    "project": "e-serde",
+    "stage": "bench",
+    "revision": 7,
+    "sample_rate": 0.15,
+    "strict": true
   },
-  "scripts": {
-    "start": "node index.js",
-    "test": "jest"
+  "settings": {
+    "region": "eu-west-1",
+    "log_level": "info",
+    "drain_sec": 30,
+    "flags": ["beta-routing", "serde-v2"]
   },
-  "keywords": [
-    "sample",
-    "test"
-  ],
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/test/sample.git"
+  "types": {
+    "string": "plain",
+    "empty_string": "",
+    "int": -42,
+    "bigint": 9007199254740991,
+    "float": 3.5,
+    "float_int": 2.0,
+    "float_pi": 3.141592653589793,
+    "bool": true,
+    "bool_false": false,
+    "null_value": null,
+    "empty_array": [],
+    "empty_object": {},
+    "array_of_scalars": [1, "two", 3.0, true],
+    "array_of_objects": [{"k": 1}, {"k": 2}],
+    "nested": {
+      "level1": {
+        "level2": {"leaf": 0.25, "branch": ["deep", "wider"]}
+      }
+    },
+    "unicode": "Málaga ñ 日本語 ✓",
+    "numeric_string": "123",
+    "boolean_string": "true",
+    "octal_string": "0755",
+    "date_like": "2024-01-15",
+    "url": "https://example.com/a?b=c#d"
   },
-  "bugs": {
-    "url": "https://github.com/test/sample/issues"
-  },
-  "homepage": "https://github.com/test/sample#readme"
+  "entries": [
+    {
+      "id": "svc-000000",
+      "name": "worker-0",
+      "endpoint": "https://api-0.internal.example/v1/resource",
+      "weight": 0.0,
+      "retries": 0,
+      "enabled": false,
+      "tags": ["tag-0", "zone-0", "bench"],
+      "limits": {"cpu": 1, "memory_mb": 256, "timeout_ms": 500},
+      "role": "admin",
+      "owner": {"team": "team-0", "email": "owner0@example.org"},
+      "headers": {"x-request-id": "req-00000000", "accept-encoding": "gzip, deflate, br", "user-agent": "e-serde-bench/1.0"}
+    },
+    {
+      "id": "svc-000001",
+      "name": "worker-1",
+      "endpoint": "https://api-1.internal.example/v1/resource",
+      "weight": 0.25,
+      "retries": 1,
+      "enabled": true,
+      "tags": ["tag-1", "zone-1", "bench"],
+      "limits": {"cpu": 2, "memory_mb": 512, "timeout_ms": 501},
+      "role": "editor",
+      "owner": {"team": "team-1", "email": "owner1@example.org"},
+      "headers": {"x-request-id": "req-00000001", "accept-encoding": "gzip, deflate, br", "user-agent": "e-serde-bench/1.0"}
+    },
+    {
+      "id": "svc-000002",
+      "name": "worker-2",
+      "endpoint": "https://api-2.internal.example/v1/resource",
+      "weight": 0.5,
+      "retries": 2,
+      "enabled": true,
+      "tags": ["tag-2", "zone-2", "bench"],
+      "limits": {"cpu": 3, "memory_mb": 768, "timeout_ms": 502},
+      "role": "viewer",
+      "owner": {"team": "team-2", "email": "owner2@example.org"},
+      "headers": {"x-request-id": "req-00000002", "accept-encoding": "gzip, deflate, br", "user-agent": "e-serde-bench/1.0"}
+    }
+  ]
 }

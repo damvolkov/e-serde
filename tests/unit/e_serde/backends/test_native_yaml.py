@@ -43,13 +43,23 @@ async def test_dumps_quotes_ambiguity(codec: NativeYamlCodec) -> None:
     assert codec.dumps({"a": "true", "b": "123", "c": "# hash"}) == b'a: "true"\nb: "123"\nc: "# hash"\n'
 
 
+async def test_dumps_quotes_yaml11_retyped_strings(codec: NativeYamlCodec) -> None:
+    payload = {"date": "2024-01-15", "yn": "yes", "switch": "off", "hex": "0x1F", "inf": ".inf"}
+    assert codec.dumps(payload) == b'date: "2024-01-15"\nyn: "yes"\nswitch: "off"\nhex: "0x1F"\n"inf": ".inf"\n'
+
+
 async def test_dumps_empty_collections(codec: NativeYamlCodec) -> None:
     assert codec.loads(codec.dumps({"a": {}, "b": []})) == {"a": {}, "b": []}
 
 
 async def test_dumps_sequence_of_mappings(codec: NativeYamlCodec) -> None:
-    payload = {"rows": [{"i": 1}, {"i": 2}]}
+    payload = {"rows": [{"i": 1, "name": "a"}, {"i": 2, "name": "b"}]}
     assert codec.loads(codec.dumps(payload)) == payload
+
+
+async def test_dumps_sequence_of_mappings_alignment(codec: NativeYamlCodec) -> None:
+    payload = {"rows": [{"i": 1, "name": "a"}, {"i": 2, "name": "b"}]}
+    assert codec.dumps(payload) == b"rows:\n- i: 1\n  name: a\n- i: 2\n  name: b\n"
 
 
 async def test_loads_multi_document_raises(codec: NativeYamlCodec) -> None:

@@ -88,9 +88,15 @@ fn emit_document(value: &Value, out: &mut String) {
 }
 
 fn emit_mapping(map: &Map<String, Value>, indent: usize, out: &mut String) {
+    emit_mapping_padded(map, indent, true, out);
+}
+
+fn emit_mapping_padded(map: &Map<String, Value>, indent: usize, pad_first: bool, out: &mut String) {
     let pad = " ".repeat(indent);
-    for (key, item) in map {
-        out.push_str(&pad);
+    for (position, (key, item)) in map.iter().enumerate() {
+        if position > 0 || pad_first {
+            out.push_str(&pad);
+        }
         out.push_str(&emit_token(key));
         out.push(':');
         match item {
@@ -120,7 +126,7 @@ fn emit_sequence(items: &[Value], indent: usize, out: &mut String) {
         out.push_str("- ");
         match item {
             Value::Object(nested) if !nested.is_empty() => {
-                emit_mapping(nested, indent + 2, out);
+                emit_mapping_padded(nested, indent + 2, false, out);
             }
             Value::Array(nested) if !nested.is_empty() => {
                 emit_sequence(nested, indent + 2, out);
@@ -154,10 +160,24 @@ fn text_needs_quotes(text: &str) -> bool {
     {
         return true;
     }
-    matches!(
+    if matches!(
         text,
-        "~" | "null" | "Null" | "NULL" | "true" | "True" | "TRUE" | "false" | "False" | "FALSE"
-    ) || text.parse::<f64>().is_ok()
+        "~" | ".inf" | ".Inf" | ".INF" | ".nan" | ".NaN" | ".NAN"
+    ) || matches!(
+        text.to_ascii_lowercase().as_str(),
+        "null" | "true" | "false" | "y" | "n" | "yes" | "no" | "on" | "off"
+    ) {
+        return true;
+    }
+    text.parse::<f64>().is_ok() || looks_numeric_or_date(text)
+}
+
+fn looks_numeric_or_date(text: &str) -> bool {
+    if !text.starts_with(['+', '-', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9']) {
+        return false;
+    }
+    text.chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.' | '_' | ':' | ' '))
 }
 
 #[pyfunction]

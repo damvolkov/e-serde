@@ -53,10 +53,27 @@ test = [
 build = [
     "maturin>=1.10",
 ]
+bench = [
+    "pytest-benchmark>=5.3",
+    "matplotlib>=3.11",
+    "pydantic>=2.13",
+    "orjson>=3.12",
+    "ujson>=6.0",
+    "simplejson>=4.1",
+    "pyyaml>=6.0.3",
+    "ruamel.yaml>=0.19",
+    "json5>=0.15",
+    "pyjson5>=2.0",
+    "rtoml>=0.13",
+    "tomli>=2.4",
+    "tomli-w>=1.2",
+    "tomlkit>=0.15",
+]
 dev = [
     { include-group = "lint" },
     { include-group = "test" },
     { include-group = "build" },
+    { include-group = "bench" },
     "prek>=0.4",
 ]
 
@@ -87,9 +104,10 @@ ignore = ["E501", "ISC001", "PLR0913"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101", "PLR2004", "ARG", "FBT"]
+"tests/benchmark/report.py" = ["RUF001"]  # "×3.2" ratio labels are typography, not lookalike abuse
 
 [tool.ruff.lint.isort]
-known-first-party = ["e_serde"]
+known-first-party = ["e_serde", "tests"]
 
 [tool.ruff.lint.flake8-builtins]
 ignorelist = ["format", "type"]  # `format=`/`type=` are the intentional keyword-only public API
@@ -112,13 +130,17 @@ error-on-warning = true
 [tool.pytest]
 minversion = "9.0"
 testpaths = ["tests"]
-addopts = ["--import-mode=importlib", "-ra"]
+addopts = ["--import-mode=importlib", "-ra", "-m", "not bench"]
+pythonpath = ["."]
 strict = true
 filterwarnings = ["error"]
 timeout = "60"
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
-markers = ["slow: slow tests (deselect with -m 'not slow')"]
+markers = [
+    "slow: slow tests (deselect with -m 'not slow')",
+    "bench: rival benchmark matrix (run via make bench)",
+]
 
 [tool.coverage.run]
 source_pkgs = ["e_serde"]
