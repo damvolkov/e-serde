@@ -13,9 +13,6 @@ on:
         type: string
         default: ""
 
-permissions:
-  contents: write
-
 concurrency:
   group: release
   cancel-in-progress: false
@@ -24,6 +21,8 @@ jobs:
   bump:
     name: Version + tag
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     outputs:
       tag: ${{ steps.next.outputs.tag }}
     steps:
@@ -31,6 +30,14 @@ jobs:
         with:
           ref: main
           token: ${{ secrets.RELEASE_PAT }}
+          persist-credentials: false
+      - name: Configure git identity and push credentials
+        env:
+          RELEASE_PAT: ${{ secrets.RELEASE_PAT }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config http.https://github.com/.extraheader "AUTHORIZATION: basic $(printf '%s:%s' 'x-access-token' "$RELEASE_PAT" | base64 -w0)"
       - id: next
         env:
           BUMP: ${{ inputs.bump }}
@@ -56,8 +63,6 @@ jobs:
           sed -i "0,/^version = \"[0-9]*\.[0-9]*\.[0-9]*\"/s//version = \"${TAG#v}\"/" Cargo.toml
           cargo update --workspace
           uv lock
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add Cargo.toml Cargo.lock uv.lock
           git commit -m "chore(release): $TAG"
           git push origin main
@@ -89,10 +94,13 @@ jobs:
           - os: windows-latest
             target: x86_64-pc-windows-msvc
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           ref: ${{ needs.bump.outputs.tag }}
+          persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.14"
@@ -112,10 +120,13 @@ jobs:
     name: sdist
     needs: bump
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           ref: ${{ needs.bump.outputs.tag }}
+          persist-credentials: false
       - uses: Swatinem/rust-cache@63fed3e2fecf6f7b51dc6f043341b79ef82a9ae7  # v2.9.2
       - uses: PyO3/maturin-action@3e2bdf6ba6453a61e649744019b8a2d906c7eb38  # v1.51.0
         with:
