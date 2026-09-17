@@ -7,6 +7,7 @@ import dataclasses
 import enum
 from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
+from fractions import Fraction
 from pathlib import PurePosixPath
 from uuid import UUID
 
@@ -167,3 +168,60 @@ async def test_encode_unsupported_raises() -> None:
 
     with pytest.raises(EncoderError):
         encode(_Opaque())
+
+
+##### HOOKS #####
+
+
+class _Tag:
+    __slots__ = ("value",)
+
+    def __init__(self, value: int) -> None:
+        self.value = value
+
+
+async def test_encode_default_transforms_unknown_type() -> None:
+    assert encode({"t": _Tag(3)}, default=lambda tag: tag.value) == {"t": 3}
+
+
+async def test_encode_default_result_is_rewalked() -> None:
+    assert encode(_Tag(1), default=lambda tag: {"v": datetime(2020, 1, 1, tzinfo=UTC)}) == {
+        "v": "2020-01-01T00:00:00+00:00"
+    }
+
+
+async def test_encode_default_raises_through_when_hook_fails() -> None:
+    def _boom(_obj: object) -> object:
+        msg = "nope"
+        raise ValueError(msg)
+
+    with pytest.raises(ValueError, match="nope"):
+        encode(_Tag(1), default=_boom)
+
+
+async def test_encode_encoders_preempt_builtin_rules() -> None:
+    assert encode({"d": date(2020, 1, 2)}, encoders={date: lambda d: str(d.year)}) == {"d": "2020"}
+
+
+async def test_encode_encoders_match_exact_type_only() -> None:
+    assert encode({"dt": datetime(2020, 1, 2, 3, 4, tzinfo=UTC)}, encoders={date: lambda d: "shadowed"}) == {
+        "dt": "2020-01-02T03:04:00+00:00",
+    }
+
+
+async def test_encode_encoders_compose_with_default() -> None:
+    encoded = encode({"a": _Tag(1), "b": Fraction(1, 2)}, encoders={_Tag: lambda t: t.value}, default=float)
+    assert encoded == {"a": 1, "b": 0.5}
+
+
+async def test_encode_default_none_keeps_legacy_error() -> None:
+    with pytest.raises(EncoderError):
+        encode(_Tag(1))
+
+
+async def test_encode_register_extends_global_rules() -> None:
+    class _Registered:
+        __slots__ = ()
+
+    encode.register(_Registered)(lambda _obj: "registered")
+    assert encode([_Registered()]) == ["registered"]

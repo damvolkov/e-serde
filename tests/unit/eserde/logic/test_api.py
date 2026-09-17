@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import dataclasses
 from datetime import UTC, datetime
+from fractions import Fraction
+from ipaddress import IPv4Address
 from typing import TYPE_CHECKING
 
 import msgspec
+import pydantic
 import pytest
 
 from eserde import FormatError, LoaderError, LoadError
@@ -175,3 +178,84 @@ async def test_aload_adump_binary_handles(tmp_path: Path) -> None:
 async def test_errors_share_hierarchy() -> None:
     assert issubclass(FormatError, LoaderError)
     assert issubclass(LoadError, LoaderError)
+
+
+##### DECODE HOOKS #####
+
+
+async def test_loads_object_hook_walks_bottom_up() -> None:
+    decoded = loads(b'{"a": {"b": 1}}', format=Format.JSON, object_hook=lambda d: {"wrap": d})
+    assert decoded == {"wrap": {"a": {"wrap": {"b": 1}}}}
+
+
+async def test_loads_object_hook_on_typed_tree_before_convert() -> None:
+    decoded = loads(
+        b'[{"host": "h", "port": 1}]',
+        format=Format.JSON,
+        object_hook=dict,
+        type=list[_Server],
+    )
+    assert decoded == [_Server(host="h", port=1)]
+
+
+class _Net(msgspec.Struct):
+    ip: IPv4Address
+
+
+async def test_loads_dec_hook_materializes_custom_fields() -> None:
+    assert loads(b'{"ip": "10.0.0.1"}', format=Format.JSON, type=_Net, dec_hook=lambda t, v: t(v)) == _Net(
+        ip=IPv4Address("10.0.0.1")
+    )
+
+
+async def test_loads_dec_hook_without_type_raises() -> None:
+    with pytest.raises(FormatError, match="requires a type"):
+        loads(b"{}", format=Format.JSON, dec_hook=lambda t, v: None)
+
+
+async def test_aloads_carries_decode_hooks() -> None:
+    decoded = await aloads(b'{"a": 1}', format=Format.JSON, object_hook=lambda d: {**d, "seen": True})
+    assert decoded == {"a": 1, "seen": True}
+
+
+##### ENCODE HOOKS #####
+
+
+async def test_dumps_default_and_encoders_per_call() -> None:
+    data = {"a": Fraction(1, 2), "b": Fraction(1, 4)}
+    with_default = loads(dumps(data, format=Format.JSON, default=float), format=Format.JSON)
+    with_encoders = loads(dumps(data, format=Format.JSON, encoders={Fraction: str}), format=Format.JSON)
+    assert (with_default, with_encoders) == ({"a": 0.5, "b": 0.25}, {"a": "1/2", "b": "1/4"})
+
+
+async def test_adumps_carries_encode_hooks() -> None:
+    encoded = await adumps({"f": Fraction(3, 4)}, format=Format.YAML, default=float)
+    assert loads(encoded, format=Format.YAML) == {"f": 0.75}
+
+
+##### PYDANTIC SCHEMAS #####
+
+
+async def test_loads_pydantic_model_and_generics() -> None:
+    class _M(pydantic.BaseModel):
+        n: int
+
+    assert loads(b'{"n": 5}', format=Format.JSON, type=_M) == _M(n=5)
+    assert loads(b'[{"n": 5}]', format=Format.JSON, type=list[_M]) == [_M(n=5)]
+    assert await aloads(b'{"n": 5}', format=Format.JSON, type=_M) == _M(n=5)
+
+
+async def test_loads_pydantic_invalid_wraps_as_load_error() -> None:
+    class _M(pydantic.BaseModel):
+        n: int
+
+    with pytest.raises(LoadError, match="schema validation failed"):
+        loads(b'{"n": "x"}', format=Format.JSON, type=_M)
+
+
+async def test_loads_unknown_class_keeps_msgspec_rejection() -> None:
+    class _Opaque:
+        __slots__ = ()
+
+    with pytest.raises(LoadError):
+        loads(b'{"x": 1}', format=Format.JSON, type=_Opaque)

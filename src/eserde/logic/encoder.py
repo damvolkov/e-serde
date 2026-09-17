@@ -1,14 +1,16 @@
 """Jsonable encoder — canonicalizes arbitrary Python objects to a JSON-compatible tree.
 
-Stdlib `functools.singledispatch`; output is safe to feed into any backend `dumps`.
-The facade applies it before encoding, so every format shares one normalization contract
-(bytes -> base64 str, datetime -> ISO str, Enum -> value, dataclass/pydantic -> dict).
+Leaf transforms live in a `functools.singledispatch` registry; the container walk lives
+here, so per-call hooks thread through the traversal without global state: `encoders`
+wins on exact type before any built-in rule, `default` is the last-resort fallback for
+unknown types (json/orjson semantics). Output is safe to feed into any backend `dumps`.
 """
 
 from __future__ import annotations
 
 import base64
 import dataclasses
+from collections.abc import Callable, Mapping
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from enum import Enum
@@ -22,92 +24,128 @@ import msgspec
 from eserde.infra.errors import EncoderError
 
 type Jsonable = bool | int | float | str | list[Any] | dict[str, Any] | None
+type Default = Callable[[Any], Any]
+type Encoders = Mapping[type, Callable[[Any], Any]]
+
+_PASSTHROUGH: frozenset[type] = frozenset({bool, int, float, str})
+
+
+##### PRIVATE #####
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class _Hooks:
+    default: Default | None = None
+    encoders: Encoders = dataclasses.field(default_factory=dict)
 
 
 @singledispatch
-def encode(obj: Any) -> Any:
-    """Fallback for msgspec Structs, pydantic models, dataclasses and exotic objects."""
+def _leaf(obj: Any) -> Any:
+    """Duck-typed models for objects the walk cannot consume: pydantic, Struct, dataclass."""
     if (model_dump := getattr(obj, "model_dump", None)) is not None and callable(model_dump):
-        return encode(model_dump(mode="json"))
+        return model_dump(mode="json")
     if isinstance(obj, msgspec.Struct):
-        return encode(msgspec.to_builtins(obj))
+        return msgspec.to_builtins(obj)
     if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
-        return encode(dataclasses.asdict(obj))
+        return dataclasses.asdict(obj)
     msg = f"cannot encode object of type {type(obj).__name__!r}"
     raise EncoderError(msg)
 
 
-@encode.register(type(None))
-def _encode_none(obj: None) -> None:
-    return obj
-
-
-@encode.register(bool)
-@encode.register(int)
-@encode.register(float)
-@encode.register(str)
-def _encode_passthrough(obj: Any) -> Any:
-    return obj
-
-
-@encode.register(bytes)
-@encode.register(bytearray)
-def _encode_bytes(obj: bytes | bytearray) -> str:
+@_leaf.register(bytes)
+@_leaf.register(bytearray)
+def _leaf_bytes(obj: bytes | bytearray) -> str:
     return base64.b64encode(obj).decode("ascii")
 
 
-@encode.register(dict)
-def _encode_dict(obj: dict[Any, Any]) -> dict[str, Any]:
-    return {_jsonable_key(k): encode(v) for k, v in obj.items()}
-
-
-@encode.register(list)
-@encode.register(tuple)
-@encode.register(set)
-@encode.register(frozenset)
-@encode.register(range)
-def _encode_sequence(obj: Any) -> list[Any]:
-    return [encode(item) for item in obj]
-
-
-@encode.register(datetime)
-@encode.register(date)
-@encode.register(time)
-def _encode_temporal(obj: datetime | date | time) -> str:
+@_leaf.register(datetime)
+@_leaf.register(date)
+@_leaf.register(time)
+def _leaf_temporal(obj: datetime | date | time) -> str:
     return obj.isoformat()
 
 
-@encode.register(timedelta)
-def _encode_timedelta(obj: timedelta) -> float:
+@_leaf.register(timedelta)
+def _leaf_timedelta(obj: timedelta) -> float:
     return obj.total_seconds()
 
 
-@encode.register(UUID)
-@encode.register(PurePath)
-@encode.register(Decimal)
-def _encode_textual(obj: Any) -> str:
+@_leaf.register(UUID)
+@_leaf.register(PurePath)
+@_leaf.register(Decimal)
+def _leaf_textual(obj: Any) -> str:
     return str(obj)
 
 
-@encode.register(complex)
-def _encode_complex(obj: complex) -> dict[str, float]:
+@_leaf.register(complex)
+def _leaf_complex(obj: complex) -> dict[str, float]:
     return {"real": obj.real, "imag": obj.imag}
 
 
-@encode.register(Enum)
-def _encode_enum(obj: Enum) -> Any:
-    return encode(obj.value)
+@_leaf.register(Enum)
+def _leaf_enum(obj: Enum) -> Any:
+    return obj.value
 
 
-def _jsonable_key(key: Any) -> str:
-    """Coerce a dict key to its JSON-compatible string representation."""
+def _walk(obj: Any, hooks: _Hooks) -> Any:
+    if obj is None or type(obj) in _PASSTHROUGH:
+        return obj
+    if (custom := hooks.encoders.get(type(obj))) is not None:
+        return _walk(custom(obj), hooks)
+    match obj:
+        case Mapping():
+            return {_key(key, hooks): _walk(value, hooks) for key, value in obj.items()}
+        case bytes() | bytearray():
+            return _walk(_leaf(obj), hooks)
+        case list() | tuple() | set() | frozenset() | range():
+            return [_walk(item, hooks) for item in obj]
+        case _:
+            return _walk(_resolve_leaf(obj, hooks), hooks)
+
+
+def _resolve_leaf(obj: Any, hooks: _Hooks) -> Any:
+    try:
+        return _leaf(obj)
+    except EncoderError:
+        if hooks.default is None:
+            raise
+        return hooks.default(obj)
+
+
+def _key(key: Any, hooks: _Hooks) -> str:
     match key:
         case str():
-            return key
+            return str(key)
         case bool() | int() | float():
             return str(key)
         case None:
             return "null"
         case _:
-            encoded = encode(key)
-            return encoded if isinstance(encoded, str) else str(encoded)
+            return str(_walk(key, hooks))
+
+
+##### PUBLIC #####
+
+
+class Encoder:
+    """Callable entry point: normalize `obj` into a Jsonable tree.
+
+    `encoders` intercepts by exact type ahead of every built-in; `default` is consulted
+    only when nothing matched, and its result is re-walked. `register` keeps the global
+    `functools.singledispatch` extension point.
+    """
+
+    __slots__ = ("_leaf",)
+
+    def __init__(self, leaf: Any) -> None:
+        self._leaf = leaf
+
+    def __call__(self, obj: Any, *, default: Default | None = None, encoders: Encoders | None = None) -> Any:
+        return _walk(obj, _Hooks(default=default, encoders=encoders or {}))
+
+    def register(self, cls: type | None = None, **kwargs: Any) -> Callable[[Any], Any]:
+        """Bind a leaf transform for `cls`; usable bare as a decorator, like `singledispatch.register`."""
+        return self._leaf.register(cls, **kwargs)
+
+
+encode = Encoder(_leaf)
