@@ -19,7 +19,7 @@ jobs:
           # release-plz pushes with its own token; checkout must not persist the default one.
           persist-credentials: false
       - name: Generate release pull request (merge it to tag v0.1.1, v0.2.0, ...)
-        uses: release-plz/action@c18510d384e6f6d444fc5c051838e6adceb6c8c0  # v0.5.137
+        uses: release-plz/action@8e61445f0b34e7c6d985255f2f1f05a36eb350dc  # v0.5.137
         with:
           command: release
         env:
