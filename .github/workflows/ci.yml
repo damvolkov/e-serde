@@ -50,7 +50,7 @@ jobs:
       - name: Sync env (builds the maturin extension in place)
         run: uv sync
       - name: Unit tests + coverage gate
-        run: uv run pytest -m "not slow" --cov --cov-report=term
+        run: uv run pytest -m "not bench and not slow" --cov --cov-report=term
 
   docs:
     name: docs build · pages deploy
@@ -72,11 +72,11 @@ jobs:
           uv sync --group docs --no-install-project
           uv run mkdocs build --strict
       - name: Upload site for Pages
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.event.repository.visibility == 'public'
         uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b  # v4.0.0
         with:
           path: site
       - name: Deploy to GitHub Pages
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.event.repository.visibility == 'public'
         id: deployment
         uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128  # v5.0.0

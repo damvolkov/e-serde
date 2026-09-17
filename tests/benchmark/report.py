@@ -166,7 +166,7 @@ def main(argv: list[str]) -> int:
     parser.add_argument("out_dir", type=Path)
     args = parser.parse_args(argv[1:])
 
-    table = _index(json.loads(args.bench_json.read_text())["benchmarks"])
+    table = _index(json.loads(args.bench_json.read_text(encoding="utf-8"))["benchmarks"])
     args.out_dir.mkdir(parents=True, exist_ok=True)
     lines = [
         "# e-serde benchmark report",

@@ -52,7 +52,7 @@ def test_sample_cross_format_equivalence() -> None:
 
 
 def test_sample_jsonc_carries_comments() -> None:
-    text = (RESOURCES / "sample.jsonc").read_text()
+    text = (RESOURCES / "sample.jsonc").read_text(encoding="utf-8")
     assert "//" in text
     assert "/*" in text
     assert loads(text, format=Format.JSONC) == _sample(Format.JSON)

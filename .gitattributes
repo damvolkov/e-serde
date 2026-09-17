@@ -1,0 +1,7 @@
+# Normalize line endings so byte-level fixtures are identical on every OS.
+* text=auto eol=lf
+*.png binary
+*.so binary
+*.pyd binary
+*.dll binary
+Cargo.lock text eol=lf
