@@ -1,7 +1,7 @@
 # Benchmarks
 
 Median decode/encode of a **100 KB** config on CPython 3.14, release build. Lower is
-faster; the ratio is against e-serde. Regenerate everything with `make bench`.
+faster; the ratio is against e-serde.
 
 The corpus is the canonical `tests/resources/sample.*` file, grown to each size — the
 same bytes every rival parses. The rivals are each library's *own* recommended API.
@@ -51,8 +51,3 @@ for `aloads` on large payloads.
 Python-visible allocations (`tracemalloc`) per 100 KB decode. C/Rust buffers that never
 touch the Python allocator read low by design — that is a feature, not a measurement gap.
 
-## Reproduce
-
-```bash
-make bench        # builds release, runs the matrix, writes assets/benchmarks/*.png
-```

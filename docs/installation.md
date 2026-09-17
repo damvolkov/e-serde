@@ -33,15 +33,6 @@ e-serde
 #   ini   -> NativeIniCodec
 ```
 
-## From source
-
-```bash
-git clone https://github.com/damvolkov/e-serde && cd e-serde
-uv sync            # builds the Rust extension in place (maturin)
-```
-
-Requires a Rust toolchain. See [Development](development.md).
-
 ## Runtime dependencies
 
 Only `msgspec`. The native codecs are compiled into the wheel as `eserde._native`; if the

@@ -51,6 +51,17 @@ srv = eserde.loads(b'{"host": "x", "port": 8080}', format=eserde.Format.JSON, ty
 
 # file helpers, json-module semantics
 eserde.dump(cfg, Path("out.jsonc"))
+
+# custom types, per call (json/orjson semantics) — no global patching
+from fractions import Fraction
+eserde.dumps({"f": Fraction(1, 2)}, format=eserde.Format.JSON, default=float)
+# b'{"f":0.5}'
+eserde.loads(b'{"n": 5}', format=eserde.Format.JSON, type=SomePydanticModel)
+# validated through TypeAdapter; violations still surface as eserde.LoadError
+
+# json-module drop-in for frameworks that duck-type it (aiohttp, structlog, logging)
+from eserde import compat
+compat.dumps({"a": 1}, ensure_ascii=False)         # '{"a":1}' native compact utf-8
 ```
 
 Async — I/O and GIL-free native parsing off the event loop:
@@ -60,8 +71,8 @@ async def main():
     srv = await eserde.aloads(Path("config.yaml"), type=Server)
 ```
 
-`strict=False` enables type coercion — the escape hatch INI needs. The full guide lives in
-the docs: build them locally with `make docs` (see [Development](#development)).
+`strict=False` enables type coercion — the escape hatch INI needs. The full guide lives
+at [damvolkov.github.io/e-serde](https://damvolkov.github.io/e-serde/).
 
 ## Formats and backends
 
@@ -134,18 +145,7 @@ uv sync                  # installs the dev group, builds the extension in place
 make test                # pytest
 make check               # ruff + format + ty + tach + pytest (what CI runs)
 make bench               # rival benchmark matrix → assets/benchmarks/*.png
-make docs-serve          # serve the docs at http://127.0.0.1:8000/e-serde/
-make release             # maturin build --release → wheel in target/wheels
 ```
-
-## Versioning and releases
-
-`Cargo.toml` (`[workspace.package].version`) is the single source of truth. pyproject
-declares `dynamic = ["version"]` and maturin derives the wheel version from the crate
-(SemVer → PEP 440). Releases are git-driven: **conventional commits** on `main` feed
-[release-plz](https://release-plz.dev/), which opens a version-bump PR; merging it cuts
-the `vX.Y.Z` tag and GitHub release, and `publish.yml` builds sdist + wheels and publishes
-to PyPI via **trusted publishing** (OIDC — no tokens stored).
 
 ## Roadmap
 
