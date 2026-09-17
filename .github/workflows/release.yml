@@ -65,8 +65,8 @@ jobs:
           cargo update --workspace
           uv lock
           git add Cargo.toml Cargo.lock uv.lock
-          git commit -m "chore(release): $TAG"
-          git push origin main
+          git diff --cached --quiet || git commit -m "chore(release): $TAG"
+          git diff --cached --quiet || git push origin main
           git tag "$TAG"
           git push origin "$TAG"
       - name: GitHub release
