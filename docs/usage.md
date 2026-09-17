@@ -81,6 +81,79 @@ eserde.dumps({"name": "demian", "n": 42}, format=Format.YAML)
 eserde.dump({"a": 1}, Path("out.jsonc"))          # format from the .jsonc suffix
 ```
 
+## Custom types on encode
+
+`encoders=` intercepts by exact type, ahead of every built-in rule; `default=` is the
+json/orjson-style last resort for anything the walk cannot recognize. Both are per call —
+no global patching, no monkey-patching. The hook result is re-walked, so hooks may return
+structures of their own. Unknown types without a hook raise `EncoderError`, exactly as before.
+
+```python
+from datetime import date
+from fractions import Fraction
+
+eserde.dumps({"f": Fraction(1, 2)}, format=Format.JSON, default=float)
+# b'{"f":0.5}'
+
+eserde.dumps({"f": Fraction(1, 2)}, format=Format.JSON, encoders={Fraction: str})
+# b'{"f":"1/2"}'
+
+eserde.dumps({"d": date(2020, 1, 2)}, format=Format.JSON, encoders={date: lambda d: d.year})
+# b'{"d":2020}'     # exact-type hook beats the ISO-string built-in
+```
+
+## Custom types on decode
+
+`object_hook` post-processes every decoded mapping, json semantics (innermost first).
+`dec_hook` teaches the validator about custom fields inside a `type=` schema:
+
+```python
+from ipaddress import IPv4Address
+import msgspec
+
+class Net(msgspec.Struct):
+    ip: IPv4Address
+
+eserde.loads(b'{"ip": "10.0.0.1"}', format=Format.JSON, type=Net, dec_hook=lambda t, v: t(v))
+# Net(ip=IPv4Address('10.0.0.1'))
+```
+
+`dec_hook` without `type=` raises `FormatError` — there is nothing to type it against.
+
+## pydantic and attrs as `type=`
+
+`type=` accepts any pydantic model or generic (`list[User]`, `dict[str, User]`) and routes
+it through a cached `TypeAdapter`, imported lazily; attrs stays on the msgspec path.
+Schema violations surface as `eserde.LoadError` regardless of which engine caught them:
+
+```python
+import pydantic
+
+class User(pydantic.BaseModel):
+    name: str
+    age: int
+
+eserde.loads(b'[{"name": "x", "age": 9}]', format=Format.JSON, type=list[User])
+# [User(name='x', age=9)]     # decode: native codecs; validate: pydantic
+```
+
+## json drop-in (`eserde.compat`)
+
+Frameworks duck-type the stdlib module (`json_serialize=`, renderers, formatters).
+`eserde.compat` speaks `json.dumps`/`json.loads` exactly — same signature, `str` output:
+
+```python
+from eserde import compat
+
+compat.dumps({"a": 1}, ensure_ascii=False)      # '{"a":1}'  — native compact utf-8
+compat.dumps({"a": 1})                          # byte-faithful to stdlib json
+compat.loads('{"a": 1.5}', parse_float=Decimal) # delegated to stdlib, never guessed
+```
+
+Behaviours e-serde does not share with the stdlib (`cls=`, ascii escaping, `indent`,
+`sort_keys`, `parse_*`, `object_pairs_hook`) delegate to it: slower, but exact — no
+silent surprises behind a json-shaped signature.
+
 ## Async twins
 
 `aloads / aload / adumps / adump` move both I/O and GIL-free native parsing off the
