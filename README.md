@@ -209,8 +209,10 @@ make bench               # rival benchmark matrix → assets/benchmarks/*.png
 
 ## Roadmap
 
-The next iteration probes interop: using e-serde as the front-end decoder for
-`msgspec`, `pydantic` and `fastapi` request/config pipelines.
+Interop landed: `eserde` is a custom encoder for any framework that ducks-types `json`
+(`eserde.compat`), validates `pydantic`/`attrs` models through `type=`, and accepts
+per-call `default=`/`encoders=`/`dec_hook=` hooks. Next: concurrency stress at scale —
+thousands of simultaneous loads, GIL-detachment behavior and the thread-pool ceiling.
 
 ## License
 
