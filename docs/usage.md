@@ -1,96 +1,69 @@
 # Usage
 
-Six functions with `json`-module semantics. `loads/dumps` take `bytes | str | Path`;
-`load/dump` take a `Path` or an open binary handle. Every function has an async twin
-prefixed with `a`.
+Six functions with `json`-module semantics and keyword-only options. `loads`/`dumps` are
+in-memory; `load`/`dump` take files; every function has an async twin prefixed with `a`.
+
+| Function | Input | Output |
+| --- | --- | --- |
+| `loads` | `bytes \| str \| Path` | plain tree, or the model in `type=` |
+| `dumps` | any object | `bytes` |
+| `load` | `Path \| BinaryIO` | like `loads` |
+| `dump` | object → file | `None` |
+| `aloads` · `adumps` · `aload` · `adump` | same | awaitables of the same |
 
 ```python
 import eserde
+import msgspec
+from eserde import Format
+from pathlib import Path
 ```
 
 !!! tip "Format"
-    Sources given as `bytes`/`str` must name the format: `format=eserde.Format.JSON`.
+    Sources given as `bytes`/`str` must name the format: `format=Format.JSON`.
     A `Path` autodetects from its extension (`.json .jsonc .yaml .yml .toml .ini .cfg .conf`).
 
-## loads — decode to objects
+## loads — decode
 
 ```python
-from eserde import Format
-
-data = eserde.loads(b'{"host": "0.0.0.0", "port": 8080}', format=Format.JSON)
+cfg = eserde.loads(b'{"host": "0.0.0.0", "port": 8080}', format=Format.JSON)
 # {'host': '0.0.0.0', 'port': 8080}
 
-# a str source is fine too — the bytes are decoded as UTF-8
-eserde.loads('port: 8080', format=Format.YAML)
+eserde.loads('port: 8080', format=Format.YAML)     # a str source is fine — decoded as UTF-8
 # {'port': 8080}
 ```
 
-## load — decode a file
-
 ```python
-from pathlib import Path
-
-cfg = eserde.load(Path("config.toml"))          # format from the .toml suffix
-raw = eserde.loads(Path("deploy.yaml"))          # loads() accepts a Path too
-
-with open("app.json", "rb") as fh:               # or an open binary handle
-    data = eserde.load(fh, format=Format.JSON)
-```
-
-## type= — validate into a model
-
-Pass `type=` and the plain tree is run through `msgspec.convert` into any Struct,
-dataclass or TypedDict. Decoding stays Rust/C; validation is msgspec's.
-
-```python
-import msgspec
-
 class Server(msgspec.Struct, frozen=True):
     host: str
     port: int
 
-eserde.loads(b'{"host": "x", "port": 8080}', format=Format.JSON, type=Server)
-# Server(host='x', port=8080)
-
-# the same works for formats without a native validator
-eserde.loads(Path("server.yaml"), type=Server)
+srv = eserde.loads(src, format=Format.JSON, type=Server)               # → Server
+srv = eserde.loads(Path("server.yaml"), type=list[Server])             # Path + generics
+ini = eserde.loads(b"[svc]\nport = 8080\n", format=Format.INI,
+                   type=dict[str, Server], strict=False)               # "8080" → 8080
 ```
 
-A schema violation raises `eserde.LoadError`, not a raw `msgspec.ValidationError`.
+| kwarg | effect |
+| --- | --- |
+| `format=` | required for `bytes`/`str`; inferred from a `Path` |
+| `type=` | validate into a Struct, dataclass, TypedDict, attrs or pydantic model |
+| `strict=False` | msgspec coercion — the escape hatch INI needs |
+| `object_hook=` | rewrite every decoded mapping, innermost first (json semantics) |
+| `dec_hook=` | teach `type=` custom field types; requires `type=`, else `FormatError` |
+| `registry=` | swap the default codec set |
 
-## strict=False — coercion
+A schema violation raises `eserde.LoadError`, never a raw `msgspec.ValidationError`.
 
-By default types are enforced. `strict=False` lets msgspec coerce — the escape hatch
-for INI, where every value is a string:
-
-```python
-eserde.loads(b"[svc]\nport = 8080\n", format=Format.INI, type=dict[str, Server], strict=False)
-# {'svc': Server(port=8080)}   # "8080" coerced to int
-```
-
-## dumps / dump — encode
-
-`dumps` returns `bytes`; `dump` writes straight to a `Path` or handle. Every input is
-normalized through the Jsonable encoder first (datetime → ISO, `Enum` → value, `bytes`
-→ base64), so each format sees the same tree.
+## dumps — encode
 
 ```python
-eserde.dumps({"name": "demian", "n": 42}, format=Format.YAML)
+raw = eserde.dumps({"name": "demian", "n": 42}, format=Format.YAML)
 # b'name: demian\n"n": 42\n'
-
-eserde.dump({"a": 1}, Path("out.jsonc"))          # format from the .jsonc suffix
 ```
 
-## Custom types on encode
-
-`encoders=` intercepts by exact type, ahead of every built-in rule; `default=` is the
-json/orjson-style last resort for anything the walk cannot recognize. Both are per call —
-no global patching, no monkey-patching. The hook result is re-walked, so hooks may return
-structures of their own. Unknown types without a hook raise `EncoderError`, exactly as before.
-
 ```python
-from datetime import date
 from fractions import Fraction
+from datetime import date
 
 eserde.dumps({"f": Fraction(1, 2)}, format=Format.JSON, default=float)
 # b'{"f":0.5}'
@@ -99,65 +72,38 @@ eserde.dumps({"f": Fraction(1, 2)}, format=Format.JSON, encoders={Fraction: str}
 # b'{"f":"1/2"}'
 
 eserde.dumps({"d": date(2020, 1, 2)}, format=Format.JSON, encoders={date: lambda d: d.year})
-# b'{"d":2020}'     # exact-type hook beats the ISO-string built-in
+# b'{"d":2020}'   # exact-type hook beats the ISO-string built-in
 ```
 
-## Custom types on decode
+Every input is normalized through the Jsonable encoder first (datetime → ISO, `Enum` →
+value, `bytes` → base64), so each format sees the same tree.
 
-`object_hook` post-processes every decoded mapping, json semantics (innermost first).
-`dec_hook` teaches the validator about custom fields inside a `type=` schema:
+| kwarg | effect |
+| --- | --- |
+| `format=` | defaults to `Format.JSON` |
+| `encoders=` | exact-type hooks, ahead of every built-in; the result is re-walked |
+| `default=` | json/orjson-style last resort for unknown types; without it → `EncoderError` |
+| `registry=` | swap the default codec set |
+
+Both hooks are per call — no global patching, no monkey-patching.
+
+## load / dump — files
 
 ```python
-from ipaddress import IPv4Address
-import msgspec
+cfg = eserde.load(Path("config.toml"))              # format from the .toml suffix
 
-class Net(msgspec.Struct):
-    ip: IPv4Address
+with open("app.json", "rb") as fh:
+    data = eserde.load(fh, format=Format.JSON)      # an open handle needs the format
 
-eserde.loads(b'{"ip": "10.0.0.1"}', format=Format.JSON, type=Net, dec_hook=lambda t, v: t(v))
-# Net(ip=IPv4Address('10.0.0.1'))
+eserde.dump(cfg, Path("out.jsonc"))                 # writes straight to disk → None
 ```
 
-`dec_hook` without `type=` raises `FormatError` — there is nothing to type it against.
-
-## pydantic and attrs as `type=`
-
-`type=` accepts any pydantic model or generic (`list[User]`, `dict[str, User]`) and routes
-it through a cached `TypeAdapter`, imported lazily; attrs stays on the msgspec path.
-Schema violations surface as `eserde.LoadError` regardless of which engine caught them:
-
-```python
-import pydantic
-
-class User(pydantic.BaseModel):
-    name: str
-    age: int
-
-eserde.loads(b'[{"name": "x", "age": 9}]', format=Format.JSON, type=list[User])
-# [User(name='x', age=9)]     # decode: native codecs; validate: pydantic
-```
-
-## json drop-in (`eserde.compat`)
-
-Frameworks duck-type the stdlib module (`json_serialize=`, renderers, formatters).
-`eserde.compat` speaks `json.dumps`/`json.loads` exactly — same signature, `str` output:
-
-```python
-from eserde import compat
-
-compat.dumps({"a": 1}, ensure_ascii=False)      # '{"a":1}'  — native compact utf-8
-compat.dumps({"a": 1})                          # byte-faithful to stdlib json
-compat.loads('{"a": 1.5}', parse_float=Decimal) # delegated to stdlib, never guessed
-```
-
-Behaviours e-serde does not share with the stdlib (`cls=`, ascii escaping, `indent`,
-`sort_keys`, `parse_*`, `object_pairs_hook`) delegate to it: slower, but exact — no
-silent surprises behind a json-shaped signature.
+Same kwargs as `loads` / `dumps`; `load`/`dump` add nothing of their own.
 
 ## Async twins
 
-`aloads / aload / adumps / adump` move both I/O and GIL-free native parsing off the
-event loop. The same arguments apply.
+`aloads` · `adumps` · `aload` · `adump` — same signatures; I/O and the GIL-free native
+parse run off the event loop.
 
 ```python
 import asyncio
@@ -174,15 +120,65 @@ asyncio.run(main())
     cores — on 10 MB YAML/TOML the fan-out is ~2× faster than serial sync. JSON runs on
     msgspec's C decoder, which holds the GIL, so it stays flat. See [Benchmarks](benchmarks.md).
 
+## object_hook and dec_hook
+
+`object_hook` post-processes every decoded mapping (innermost first, json semantics).
+`dec_hook` teaches the validator about custom field types inside a `type=` schema:
+
+```python
+from ipaddress import IPv4Address
+
+class Net(msgspec.Struct):
+    ip: IPv4Address
+
+eserde.loads(b'{"ip": "10.0.0.1"}', format=Format.JSON, type=Net, dec_hook=lambda t, v: t(v))
+# Net(ip=IPv4Address('10.0.0.1'))
+```
+
+## pydantic and attrs models
+
+`type=` accepts any pydantic model or generic (`list[User]`, `dict[str, User]`) and routes
+it through a cached `TypeAdapter`, imported lazily; attrs stays on the msgspec path.
+Schema violations surface as `eserde.LoadError` regardless of which engine caught them:
+
+```python
+import pydantic
+
+class User(pydantic.BaseModel):
+    name: str
+    age: int
+
+eserde.loads(b'[{"name": "x", "age": 9}]', format=Format.JSON, type=list[User])
+# [User(name='x', age=9)]     # decode: native codecs; validate: pydantic
+```
+
+## compat — `json` drop-in
+
+Frameworks duck-type the stdlib module (`json_serialize=`, renderers, formatters).
+`eserde.compat` speaks `json.dumps`/`json.loads` exactly — same signature, `str` output:
+
+```python
+from eserde import compat
+
+compat.dumps({"a": 1}, ensure_ascii=False)      # '{"a":1}'  — native compact utf-8
+compat.dumps({"a": 1})                          # byte-faithful to stdlib json
+compat.loads('{"a": 1.5}', parse_float=Decimal) # delegated to stdlib, never guessed
+```
+
+Behaviours e-serde does not share with the stdlib (`cls=`, ascii escaping, `indent`,
+`sort_keys`, `parse_*`, `object_pairs_hook`) delegate to it: slower, but exact — no
+silent surprises behind a json-shaped signature.
+
 ## Errors
 
 Everything raises the `eserde.LoaderError` family:
 
-| Exception          | Raised when                              |
-| ------------------ | ---------------------------------------- |
-| `FormatError`      | format can't be inferred or is unsupported |
-| `LoadError`         | decode failed, or `type=` validation failed |
-| `DumpError`         | encoding failed                          |
-| `CodecError`        | a backend was unavailable at runtime     |
+| Exception | Raised when |
+| --- | --- |
+| `FormatError` | format can't be inferred or is unsupported |
+| `LoadError` | decode failed, or `type=` validation failed |
+| `DumpError` | encoding failed |
+| `EncoderError` | a value had no rule and no `default=` |
+| `CodecError` | a backend was unavailable at runtime |
 
 Full signatures live in the [API reference](reference.md).
