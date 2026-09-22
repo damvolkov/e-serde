@@ -6,6 +6,7 @@ use pyo3::types::{PyDict, PyModule};
 type Sections = Vec<(String, Vec<(String, String)>)>;
 
 fn decode(input: &str) -> Result<Sections, String> {
+    let input = input.trim_start_matches('\u{feff}');
     let conf = Ini::load_from_str(input).map_err(|exc| exc.to_string())?;
     let mut sections: Sections = Vec::new();
     for (name, props) in conf.iter() {

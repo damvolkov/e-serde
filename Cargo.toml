@@ -11,7 +11,8 @@ repository = "https://github.com/damvolkov/e-serde"
 [workspace.dependencies]
 pyo3 = { version = "0.29", features = ["extension-module"] }
 serde_json = { version = "1.0", features = ["preserve_order"] }
-saphyr = "0.0"
+saphyr = "0.0.12"
+saphyr-parser = "0.0.12"
 toml = { version = "1.1", features = ["preserve_order"] }
 jsonc-parser = { version = "0.33", features = ["serde"] }
 rust-ini = "0.21"

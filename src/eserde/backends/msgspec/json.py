@@ -29,6 +29,6 @@ class MsgspecJsonCodec:
     def dumps(self, obj: Any) -> bytes:
         try:
             return msgspec.json.encode(obj)
-        except (TypeError, msgspec.EncodeError) as exc:
+        except (TypeError, msgspec.EncodeError, UnicodeEncodeError) as exc:
             msg = f"json encode failed: {exc}"
             raise DumpError(msg) from exc

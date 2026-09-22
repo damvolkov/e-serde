@@ -14,6 +14,7 @@ crate-type = ["cdylib"]
 pyo3 = { workspace = true, features = ["serde"] }
 serde_json = { workspace = true }
 saphyr = { workspace = true }
+saphyr-parser = { workspace = true }
 toml = { workspace = true }
 jsonc-parser = { workspace = true }
 rust-ini = { workspace = true }

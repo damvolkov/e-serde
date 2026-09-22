@@ -87,7 +87,8 @@ dev = [
 [tool.uv]
 required-version = ">=0.12"
 default-groups = ["dev"]
-exclude-newer = { pypi = "2 days", default = "7 days" }
+exclude-newer = "7 days"
+exclude-newer-package = { e-serde = "1 day" }
 cache-keys = [{ file = "pyproject.toml" }, { file = "Cargo.toml" }, { file = "Cargo.lock" }, { git = { commit = true, tags = true } }]
 
 [tool.maturin]
