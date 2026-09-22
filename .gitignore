@@ -235,3 +235,7 @@ wheels/
 # e-serde: benchmark artifacts
 .benchmark/
 .benchmarks/
+
+# local secrets
+gh_token
+gh_personal_token
