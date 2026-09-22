@@ -28,7 +28,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "tests"))
+sys.path[:0] = [str(ROOT), str(ROOT / "tests")]
 
 from benchmark.payloads import payload  # noqa: E402
 from benchmark.rivals import LOAD_RIVALS  # noqa: E402
@@ -37,8 +37,8 @@ from eserde import Format, aloads  # noqa: E402
 type Decoder = Callable[[bytes], Any]
 
 SIZES: dict[str, dict[str, Any]] = {
-    "100kb": {"n": 192, "rounds": 3, "knees": (1, 2, 4, 8, 16, 32, 48, 64), "budget_s": 40.0},
-    "10mb": {"n": 8, "rounds": 2, "knees": (1, 4, 8, 16, 32), "budget_s": 20.0},
+    "100kb": {"n": 192, "rounds": 3, "knees": (1, 2, 4, 8, 16, 32, 48, 64), "sweep_budget_s": 150.0},
+    "10mb": {"n": 8, "rounds": 2, "knees": (1, 4, 8, 16, 32), "sweep_budget_s": 120.0},
 }
 COLLAPSE_RATIO = 0.8
 MIN_VERDICT_POINTS = 3
@@ -138,7 +138,10 @@ def verdict(points: dict[int, Sample]) -> str:
     mid_key = knees[len(knees) // 2]
     best = max(sample.ops_s for sample in points.values())
     ratio = best / base
-    collapsed = len(knees) >= MIN_VERDICT_POINTS and points[knees[-1]].ops_s < points[mid_key].ops_s * COLLAPSE_RATIO
+    grew = ratio > SCALE_EFFICIENCY / 2
+    collapsed = (
+        grew and len(knees) >= MIN_VERDICT_POINTS and points[knees[-1]].ops_s < points[mid_key].ops_s * COLLAPSE_RATIO
+    )
     match (ratio >= SCALE_EFFICIENCY, ratio >= SUBLINEAR_EFFICIENCY, collapsed):
         case (True, _, False):
             return "scales with cores"
@@ -161,7 +164,8 @@ def sweep() -> dict[str, dict[str, dict[str, dict[int, Sample]]]]:
             curves: dict[str, dict[int, Sample]] = {}
             for label, decode in LOAD_RIVALS[fmt].items():
                 probe = run_threads(decode, data, 1, 1)
-                if cfg["n"] / probe.ops_s > 2 * cfg["budget_s"]:
+                predicted_s = cfg["n"] / probe.ops_s * len(cfg["knees"]) * cfg["rounds"] / 4
+                if predicted_s > cfg["sweep_budget_s"]:
                     curves[label] = {}
                 else:
                     curves[label] = {k: run_threads(decode, data, cfg["n"], k) for k in cfg["knees"]}
@@ -233,6 +237,14 @@ def report(results: dict[str, dict[str, dict[str, dict[int, Sample]]]]) -> None:
 
 def main() -> int:
     results = sweep()
+    dump = {
+        f: {
+            s: {n: {str(k): [v.ops_s, v.p50_ms, v.p99_ms, v.rss_mib] for k, v in c.items()} for n, c in curves.items()}
+            for s, curves in sizes.items()
+        }
+        for f, sizes in results.items()
+    }
+    (ROOT / "assets" / "benchmarks" / "stress-results.json").write_text(__import__("json").dumps(dump, indent=1))
     for fmt_value, per_size in results.items():
         for size, curve in per_size.items():
             chart(fmt_value, size, curve)
