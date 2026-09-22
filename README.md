@@ -136,16 +136,21 @@ missing). The full guide lives at [damvolkov.github.io/e-serde](https://damvolko
 
 ## Formats and backends
 
-| Format | Extension             | Engine                       | Notes                     |
-| ------ | --------------------- | ---------------------------- | ------------------------- |
-| JSON   | `.json`               | `msgspec.json` (C)           | fastest-in-class decode   |
-| JSONC  | `.jsonc`              | `jsonc-parser` (Rust, Deno)  | comments, trailing commas |
-| YAML   | `.yaml` `.yml`        | `saphyr` (Rust)              | YAML 1.2 core schema      |
-| TOML   | `.toml`               | `toml` (Rust)                | datetimes → ISO strings   |
-| INI    | `.ini` `.cfg` `.conf` | `rust-ini` (Rust)            | no interpolation          |
+| Format | Extension             | Spec                       | Engine (pinned)        | Notable                              |
+| ------ | --------------------- | -------------------------- | ---------------------- | ------------------------------------ |
+| JSON   | `.json`               | RFC 8259                   | `msgspec.json` 0.21    | exact big ints, strict tokens        |
+| JSONC  | `.jsonc`              | Deno jsonc                 | `jsonc-parser` 0.33    | comments, trailing commas            |
+| YAML   | `.yaml` `.yml`        | YAML 1.2 core + merge keys | `saphyr` 0.0.12        | anchors, `<<`, bomb-guarded          |
+| TOML   | `.toml`               | TOML v1.1                  | `toml-rs` 1.1          | `inf`/`nan`, no null, i64 ints       |
+| INI    | `.ini` `.cfg` `.conf` | de-facto                   | `rust-ini` 0.21        | strings; merge on `strict=False`     |
 
-Everything Rust lives in one extension module (`eserde._native`), compiled by `maturin`
-from `crates/native`. The only runtime dependency is `msgspec`.
+The contract lives in code — `eserde.STANDARDS` — and `test_standards.py` executes every
+claim against the live codecs and the lockfiles. Bumping an engine or changing a format
+capability is a deliberate act, never silent drift. Full per-format pages (capabilities,
+limits, examples): [docs → Formats](https://damvolkov.github.io/e-serde/formats/).
+
+Everything Rust is one extension module (`eserde._native`), compiled by `maturin` from
+`crates/native`. The only runtime dependency is `msgspec`.
 
 ## Benchmarks
 

@@ -10,10 +10,10 @@ test:             ## run unit tests
 	uv run pytest
 
 lint:             ## ruff check (auto-fix)
-	uv run ruff check --fix src tests
+	uv run ruff check --fix src tests tools
 
 format:           ## ruff format
-	uv run ruff format src tests
+	uv run ruff format src tests tools
 
 types:            ## static type checking
 	uv run ty check
@@ -46,3 +46,6 @@ docs-serve:       ## serve the documentation locally
 
 docs:             ## build the documentation (strict, fails on broken links)
 	uv run --group docs mkdocs build --strict
+
+docs-formats:     ## regenerate docs/formats/*.md from the STANDARDS contract
+	uv run python tools/gen_formats.py
