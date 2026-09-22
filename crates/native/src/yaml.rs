@@ -75,6 +75,7 @@ fn add(frames: &mut [(usize, u64)], size: u64) -> Result<(), String> {
 }
 
 fn decode(input: &str) -> Result<Node, String> {
+    let input = input.trim_start_matches('\u{feff}');
     check_expansion(input)?;
     let mut docs = Yaml::load_from_str(input).map_err(|exc| exc.to_string())?;
     if docs.len() != 1 {
