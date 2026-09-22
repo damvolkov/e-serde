@@ -10,6 +10,8 @@ and rust-ini (preamble keys, `==`). Behaviour that is *lossy by design*
 
 from __future__ import annotations
 
+import math
+
 import msgspec
 import pytest
 
@@ -86,21 +88,36 @@ def test_loads_yaml_tabs_rejected() -> None:
 @pytest.mark.parametrize(
     ("raw", "expected"),
     [
-        (b"a: .inf\n", {"a": None}),
-        (b"a: .nan\n", {"a": None}),
+        (b"a: .inf\n", {"a": math.inf}),
+        (b"a: .nan\n", {"a": math.nan}),
         (b"a: 1:30\n", {"a": "1:30"}),
-        (b"a: &x {k: 1}\nb: {<<: *x}\n", {"a": {"k": 1}, "b": {"<<": {"k": 1}}}),
+        (b"a: &x {k: 1}\nb: {<<: *x}\n", {"a": {"k": 1}, "b": {"k": 1}}),
+        (b"p: &p {a: 1}\nq: &q {b: 2}\nr:\n  <<: [*p, *q]\n", {"p": {"a": 1}, "q": {"b": 2}, "r": {"a": 1, "b": 2}}),
         (b"a: !!python/object:os.system ['id']\n", {"a": ["id"]}),
         (b"~: 1\n", {"null": 1}),
         (b"a: 1\r\n", {"a": 1}),
     ],
-    ids=["inf-null", "nan-null", "sexagesimal-str", "merge-not-resolved", "python-tag-inert", "tilde-key", "crlf"],
+    ids=[
+        "inf-preserved",
+        "nan-preserved",
+        "sexagesimal-str",
+        "merge-key-resolved",
+        "merge-seq",
+        "python-tag-inert",
+        "tilde-key",
+        "crlf",
+    ],
 )
 def test_loads_yaml_core_schema(raw: bytes, expected: dict) -> None:
-    assert loads(raw, format=Format.YAML) == expected
+    result = loads(raw, format=Format.YAML)
+    for key, value in expected.items():
+        if isinstance(value, float) and math.isnan(value):
+            assert math.isnan(result[key])
+        else:
+            assert result[key] == value
 
 
-def test_loads_yaml_bignum_loses_to_float() -> None:
+def test_loads_yaml_bignum_loses_to_float_engine_limit() -> None:
     assert loads(b"a: " + b"9" * 29, format=Format.YAML) == {"a": 1e29}
 
 
@@ -157,7 +174,8 @@ def test_loads_toml_rejects(raw: bytes) -> None:
 @pytest.mark.parametrize(
     ("raw", "expected"),
     [
-        (b"[a]\nk=1\n[a]\nj=2\n", {"a": {"j": "2"}}),
+        (b"[a]\nk=1\n[a]\nj=2\n", {"a": {"k": "1", "j": "2"}}),
+        (b"[a]\nk=1\n[a]\nk=2\nj=3\n", {"a": {"k": "2", "j": "3"}}),
         (b"[a]\nk==v\n", {"a": {"k": "=v"}}),
         (b"[a]\nk=x=y\n", {"a": {"k": "x=y"}}),
         (b"\xef\xbb\xbf[a]\nk=v\n", {"a": {"k": "v"}}),
@@ -165,7 +183,16 @@ def test_loads_toml_rejects(raw: bytes) -> None:
         (b"", {}),
         ("[d\u00e9bito]\nclave=valor\n".encode(), {"d\u00e9bito": {"clave": "valor"}}),
     ],
-    ids=["dup-section-merges", "double-equals", "value-with-equals", "bom-ok", "crlf", "empty-ok", "unicode"],
+    ids=[
+        "dup-section-merges",
+        "dup-key-override",
+        "double-equals",
+        "value-with-equals",
+        "bom-ok",
+        "crlf",
+        "empty-ok",
+        "unicode",
+    ],
 )
 def test_loads_ini_ok(raw: bytes, expected: dict) -> None:
     assert loads(raw, format=Format.INI) == expected
@@ -222,3 +249,43 @@ def test_dumps_tuple_key_stringified() -> None:
 
 def test_dumps_empty_root() -> None:
     assert dumps({}, format=Format.JSON) == b"{}"
+
+
+##### numeric fidelity — the Node intermediate #####
+
+
+def test_bigint_exact_roundtrip_jsonc() -> None:
+    tree = {"x": int("9" * 40)}
+    assert loads(dumps(tree, format=Format.JSONC), format=Format.JSONC) == tree
+
+
+def test_dumps_yaml_writes_bignum_digits_exactly() -> None:
+    digits = int("9" * 40)
+    assert dumps({"x": digits}, format=Format.YAML) == f"x: {'9' * 40}\n".encode()
+
+
+def test_loads_jsonc_bignum_exact() -> None:
+    assert loads(b"9" * 40, format=Format.JSONC) == int("9" * 40)
+
+
+@pytest.mark.parametrize("fmt", [Format.YAML, Format.TOML])
+def test_nonfinite_floats_survive_roundtrip(fmt: Format) -> None:
+    tree = {"pos": math.inf, "neg": -math.inf}
+    result = loads(dumps(tree, format=fmt), format=fmt)
+    assert result["pos"] == math.inf
+    assert result["neg"] == -math.inf
+
+
+def test_dumps_toml_bignum_raises_loudly() -> None:
+    with pytest.raises(DumpError, match="64-bit"):
+        dumps({"x": 2**130}, format=Format.TOML)
+
+
+def test_jsonc_string_escaping_exact() -> None:
+    tree = {"k": 'a\n"b\t\\c\x01ünïcødé ✓'}
+    assert loads(dumps(tree, format=Format.JSONC), format=Format.JSONC) == tree
+
+
+def test_jsonc_empty_document_rejected() -> None:
+    with pytest.raises(LoadError, match="empty"):
+        loads(b"", format=Format.JSONC)

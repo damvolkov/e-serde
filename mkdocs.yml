@@ -62,5 +62,12 @@ nav:
       - Introduction: introduction.md
       - Installation: installation.md
       - Usage: usage.md
+  - Formats:
+      - formats/index.md
+      - JSON: formats/json.md
+      - JSONC: formats/jsonc.md
+      - YAML: formats/yaml.md
+      - TOML: formats/toml.md
+      - INI: formats/ini.md
   - Reference: reference.md
   - Benchmarks: benchmarks.md

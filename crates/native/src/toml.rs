@@ -1,90 +1,65 @@
-use crate::convert::{py_to_value, value_to_py};
+use crate::convert::{node_to_py, py_to_node, Node};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyModule;
-use serde_json::{Map, Value};
 
-fn toml_to_json(scalar: toml::Value) -> Value {
-    match scalar {
-        toml::Value::String(text) => Value::String(text),
-        toml::Value::Integer(int) => Value::from(int),
-        toml::Value::Float(float) => Value::from(float),
-        toml::Value::Boolean(flag) => Value::Bool(flag),
-        toml::Value::Datetime(stamp) => Value::String(stamp.to_string()),
-        toml::Value::Array(items) => Value::Array(items.into_iter().map(toml_to_json).collect()),
-        toml::Value::Table(table) => Value::Object(table_to_map(table)),
+fn to_node(value: toml::Value) -> Node {
+    match value {
+        toml::Value::String(text) => Node::Str(text),
+        toml::Value::Integer(int) => Node::Int(int),
+        toml::Value::Float(float) => Node::Float(float),
+        toml::Value::Boolean(flag) => Node::Bool(flag),
+        toml::Value::Datetime(stamp) => Node::Str(stamp.to_string()),
+        toml::Value::Array(items) => Node::Seq(items.into_iter().map(to_node).collect()),
+        toml::Value::Table(table) => Node::Map(table.into_iter().map(|(k, v)| (k, to_node(v))).collect()),
     }
 }
 
-fn table_to_map(table: toml::Table) -> Map<String, Value> {
-    table
-        .into_iter()
-        .map(|(key, item)| (key, toml_to_json(item)))
-        .collect()
-}
-
-fn decode(input: &str) -> Result<Value, String> {
+fn decode(input: &str) -> Result<Node, String> {
     let table: toml::Table = toml::from_str(input).map_err(|exc| exc.to_string())?;
-    Ok(Value::Object(table_to_map(table)))
+    Ok(Node::Map(table.into_iter().map(|(k, v)| (k, to_node(v))).collect()))
 }
 
-fn toml_to_string(value: &Value) -> Result<toml::Value, String> {
-    let converted = match value {
-        Value::Null => return Err("TOML cannot represent null".to_string()),
-        Value::Bool(b) => toml::Value::Boolean(*b),
-        Value::Number(n) => {
-            if let Some(int) = n.as_i64() {
-                toml::Value::Integer(int)
-            } else if let Some(uint) = n.as_u64() {
-                match i64::try_from(uint) {
-                    Ok(int) => toml::Value::Integer(int),
-                    Err(_) => toml::Value::Float(uint as f64),
-                }
-            } else if let Some(float) = n.as_f64() {
-                toml::Value::Float(float)
-            } else {
-                return Err(format!("unsupported TOML number: {n}"));
+fn from_node(node: Node) -> Result<toml::Value, String> {
+    Ok(match node {
+        Node::Null => return Err("TOML cannot represent null".to_string()),
+        Node::Bool(flag) => toml::Value::Boolean(flag),
+        Node::Int(int) => toml::Value::Integer(int),
+        Node::BigInt(digits) => match digits.parse::<i64>() {
+            Ok(int) => toml::Value::Integer(int),
+            Err(_) => return Err(format!("TOML cannot hold the integer {digits} (beyond its 64-bit range)")),
+        },
+        Node::Float(float) => toml::Value::Float(float),
+        Node::Str(text) => toml::Value::String(text),
+        Node::Seq(items) => toml::Value::Array(items.into_iter().map(from_node).collect::<Result<_, _>>()?),
+        Node::Map(entries) => {
+            let mut table = toml::Table::new();
+            for (key, value) in entries {
+                table.insert(key, from_node(value)?);
             }
-        }
-        Value::String(s) => toml::Value::String(s.clone()),
-        Value::Array(items) => toml::Value::Array(
-            items
-                .iter()
-                .map(toml_to_string)
-                .collect::<Result<Vec<_>, _>>()?,
-        ),
-        Value::Object(map) => {
-            let table = map
-                .iter()
-                .map(|(key, item)| Ok((key.clone(), toml_to_string(item)?)))
-                .collect::<Result<toml::Table, String>>()?;
             toml::Value::Table(table)
         }
-    };
-    Ok(converted)
-}
-
-fn encode(value: &Value) -> Result<String, String> {
-    if !value.is_object() {
-        return Err("TOML top level must be a mapping".to_string());
-    }
-    let converted = toml_to_string(value)?;
-    toml::to_string_pretty(&converted).map_err(|exc| exc.to_string())
+    })
 }
 
 #[pyfunction]
 fn loads<'py>(py: Python<'py>, data: &str) -> PyResult<Bound<'py, PyAny>> {
     let input = data.to_string();
-    let value = py
+    let node = py
         .detach(move || decode(&input))
         .map_err(PyValueError::new_err)?;
-    value_to_py(py, value)
+    node_to_py(py, node)
 }
 
 #[pyfunction]
 fn dumps(obj: Bound<'_, PyAny>) -> PyResult<String> {
-    let value = py_to_value(&obj)?;
-    encode(&value).map_err(PyValueError::new_err)
+    let node = py_to_node(&obj)?;
+    match from_node(node).map_err(PyValueError::new_err)? {
+        toml::Value::Table(table) => {
+            toml::to_string(&table).map_err(|exc| PyValueError::new_err(exc.to_string()))
+        }
+        _ => Err(PyValueError::new_err("TOML document root must be a table")),
+    }
 }
 
 pub fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {

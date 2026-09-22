@@ -24,8 +24,8 @@ jobs:
       - name: Static gates (no native build needed)
         run: |
           uv sync --group lint --no-install-project
-          uv run ruff check --output-format=github src tests
-          uv run ruff format --check src tests
+          uv run ruff check --output-format=github src tests tools
+          uv run ruff format --check src tests tools
           uv run ty check
           uv run tach check
           uv run validate-pyproject pyproject.toml

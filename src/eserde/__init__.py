@@ -16,6 +16,7 @@ from eserde.infra.errors import (
     LoadError,
 )
 from eserde.infra.formats import Format
+from eserde.infra.standards import STANDARDS, Feature
 from eserde.logic.api import adump, adumps, aload, aloads, dump, dumps, load, loads
 
 try:
@@ -24,10 +25,12 @@ except PackageNotFoundError:
     __version__ = "0.0.0+dev"
 
 __all__ = [
+    "STANDARDS",
     "CodecError",
     "CodecRegistry",
     "DumpError",
     "EncoderError",
+    "Feature",
     "Format",
     "FormatError",
     "LoadError",
