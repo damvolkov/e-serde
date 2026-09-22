@@ -1,66 +1,59 @@
 # Reference
 
-The complete public surface. All eight functions share one shape: a data source, an
-optional `format`, an optional `type` schema, a `strict` flag, a `registry` and
-per-call encode/decode hooks. Keyword arguments are enforced.
+The complete public surface: six functions plus async twins, one shared option set,
+keyword arguments enforced.
 
 ```python
 import eserde
 ```
 
-| Function | Signature |
-| -------- | --------- |
-| `loads`  | `loads(source: bytes \| str \| Path, *, format: Format \| None = None, type: type \| None = None, strict: bool = True, registry = default_registry, object_hook: Callable[[dict], Any] \| None = None, dec_hook: Callable[[type, Any], Any] \| None = None) → Any` |
-| `load`   | `load(target: Path \| BinaryIO, *, format: Format \| None = None, type: type \| None = None, strict: bool = True, registry = default_registry) → Any` |
-| `dumps`  | `dumps(obj: Any, *, format: Format = Format.JSON, registry = default_registry, default: Callable[[Any], Any] \| None = None, encoders: Mapping[type, Callable] \| None = None) → bytes` |
-| `dump`   | `dump(obj: Any, target: Path \| BinaryIO, *, format: Format \| None = None, registry = default_registry) → None` |
-| `aloads` | `async` twin of `loads` |
-| `aload`  | `async` twin of `load` |
-| `adumps` | `async` twin of `dumps` |
-| `adump`  | `async` twin of `dump` |
-
-## `loads(source, *, format=None, type=None, strict=True, registry)`
-
-Decode `source` into native Python objects, or into `type` when a schema is given.
-Auto-detects `format` from a `Path` extension; `bytes`/`str` sources require it.
+## Signatures
 
 ```python
-eserde.loads(b"[a]\nk = 1\n", format=eserde.Format.INI)      # {'a': {'k': '1'}}
+def loads(
+    source: bytes | str | Path,
+    *,
+    format: Format | None = None,
+    type: builtins.type[Any] | None = None,
+    strict: bool = True,
+    registry: CodecRegistry = default_registry,
+    object_hook: Callable[[dict[str, Any]], Any] | None = None,
+    dec_hook: Callable[[Any, Any], Any] | None = None,
+) -> Any: ...
+
+def dumps(
+    obj: Any,
+    *,
+    format: Format = Format.JSON,
+    registry: CodecRegistry = default_registry,
+    default: Callable[[Any], Any] | None = None,
+    encoders: Mapping[type, Callable[[Any], Any]] | None = None,
+) -> bytes: ...
+
+def load(target: Path | BinaryIO, *, ...) -> Any: ...        # like loads, file input
+def dump(obj: Any, target: Path | BinaryIO, *, ...) -> None: ...   # like dumps, file output
+
+# async twins — identical signatures, offloaded I/O and parsing
+def aloads(...) -> Awaitable[Any]: ...
+def adumps(...) -> Awaitable[bytes]: ...
+def aload(...) -> Awaitable[Any]: ...
+def adump(...) -> Awaitable[None]: ...
 ```
 
-## `load(target, *, format=None, type=None, strict=True, registry)`
+## Options
 
-Decode a file — a `Path` or an open binary handle. Same contract as `json.load`;
-a `Path` infers the format from its suffix.
+| Parameter | Applies to | Effect |
+| --- | --- | --- |
+| `format` | all | required for `bytes`/`str` sources and handles; inferred from a `Path` suffix |
+| `type` | decode | routes the plain tree through `msgspec.convert` into a Struct, dataclass, TypedDict or attrs class; pydantic models and generics (`list[M]`, `dict[str, M]`) are detected and validated through a lazily imported, cached `TypeAdapter`. Decoding stays Rust/C; validation is msgspec's or pydantic's. Violations raise `LoadError` either way |
+| `strict` | decode | `False` opts into msgspec coercion — the escape hatch INI needs |
+| `object_hook` | decode | rewrites each decoded mapping bottom-up, json semantics |
+| `dec_hook` | decode | `(type, value) -> Any` custom field types inside `type=`; without `type=` raises `FormatError` |
+| `default` | encode | last resort for unknown types, json/orjson semantics |
+| `encoders` | encode | `Mapping[type, Callable]` intercepted by exact type ahead of every built-in; results are re-walked |
+| `registry` | all | a `CodecRegistry` mapping each `Format` to its codec; `default_registry` ships the five built-ins — pass a custom one to swap engines without touching call sites |
 
-## `dumps(obj, *, format=Format.JSON, registry, default=None, encoders=None)`
-
-Encode `obj` to `bytes` in `format`, normalizing through the Jsonable encoder first
-(datetime → ISO, `Enum` → value, `bytes` → base64) so every codec sees the same tree.
-`encoders` intercepts by exact type ahead of every built-in; `default` is the last
-resort for unknown types; hook results are re-walked.
-
-## `dump(obj, target, *, format=None, registry)`
-
-Encode `obj` straight into a file. Format is inferred from a `Path`; a binary handle
-requires `format`.
-
-## `type`, `strict` and the hooks
-
-`type=` routes the decoded tree through `msgspec.convert` into any Struct, dataclass,
-TypedDict or attrs class; pydantic models and generics (`list[M]`, `dict[str, M]`) are
-detected and validated through a lazily imported, cached `TypeAdapter`. Decoding is
-Rust/C; validation is msgspec's or pydantic's. `strict=False` opts into coercion (the
-escape hatch INI needs). A schema violation raises `LoadError` either way.
-
-`dec_hook=(type, value) -> Any` teaches msgspec custom field types (requires `type=`);
-`object_hook=(dict) -> Any` rewrites each decoded mapping bottom-up, json semantics.
 `encode.register` remains available for library-wide type rules.
-
-## `registry`
-
-A `CodecRegistry` maps each `Format` to its codec. `default_registry` ships the five
-built-ins; pass a custom `registry=` to swap engines without touching call sites.
 
 ## `eserde.compat`
 
@@ -84,10 +77,10 @@ or returns `None`.
 
 All derive from `eserde.LoaderError`:
 
-| Exception      | Raised when                                          |
-| -------------- | ---------------------------------------------------- |
-| `FormatError`  | format can't be inferred, or a source type is invalid |
-| `LoadError`    | decode failed, or `type=` validation failed           |
-| `DumpError`    | encoding failed                                       |
-| `EncoderError` | the Jsonable normalizer hit an unserializable value   |
-| `CodecError`   | a backend was unavailable at runtime                  |
+| Exception | Raised when |
+| --- | --- |
+| `FormatError` | format can't be inferred, or a source type is invalid |
+| `LoadError` | decode failed, or `type=` validation failed |
+| `DumpError` | encoding failed |
+| `EncoderError` | the Jsonable normalizer hit an unserializable value |
+| `CodecError` | a backend was unavailable at runtime |

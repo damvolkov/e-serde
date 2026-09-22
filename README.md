@@ -27,52 +27,112 @@ uv add e-serde          # or: pip install e-serde
 
 ```python
 import eserde
-from pathlib import Path
 import msgspec
+from eserde import Format
+from pathlib import Path
+```
 
-eserde.__version__          # '0.1.0'
+Six functions, `json` semantics, keyword-only options. `bytes`/`str` sources name the
+format; a `Path` autodetects from its suffix — `.json .jsonc .yaml .yml .toml .ini .cfg .conf`.
 
-# bytes/str sources name the format; Paths autodetect by extension.
-cfg = eserde.loads(b'{"host": "0.0.0.0", "port": 8080}', format=eserde.Format.JSON)
+| Function | Input | Output |
+| --- | --- | --- |
+| `loads` | `bytes \| str \| Path` | plain tree — or the model in `type=` |
+| `dumps` | any object | `bytes` |
+| `load` | `Path \| BinaryIO` | like `loads` |
+| `dump` | object → file | `None` |
+| `aloads` · `adumps` · `aload` · `adump` | same | awaitables of the same |
+
+### loads — decode
+
+```python
+cfg = eserde.loads(b'{"host": "0.0.0.0", "port": 8080}', format=Format.JSON)
 # {'host': '0.0.0.0', 'port': 8080}
+```
 
-raw = eserde.dumps({"name": "demian", "n": 42}, format=eserde.Format.YAML)
-# b'name: demian\n"n": 42\n'
-
-cfg = eserde.load(Path("config.toml"))        # format inferred from the .toml suffix
-
-# validate straight into a frozen model — Rust decodes, msgspec validates
+```python
 class Server(msgspec.Struct, frozen=True):
     host: str
     port: int
 
-srv = eserde.loads(b'{"host": "x", "port": 8080}', format=eserde.Format.JSON, type=Server)
-# Server(host='x', port=8080)
-
-# file helpers, json-module semantics
-eserde.dump(cfg, Path("out.jsonc"))
-
-# custom types, per call (json/orjson semantics) — no global patching
-from fractions import Fraction
-eserde.dumps({"f": Fraction(1, 2)}, format=eserde.Format.JSON, default=float)
-# b'{"f":0.5}'
-eserde.loads(b'{"n": 5}', format=eserde.Format.JSON, type=SomePydanticModel)
-# validated through TypeAdapter; violations still surface as eserde.LoadError
-
-# json-module drop-in for frameworks that duck-type it (aiohttp, structlog, logging)
-from eserde import compat
-compat.dumps({"a": 1}, ensure_ascii=False)         # '{"a":1}' native compact utf-8
+srv = eserde.loads(src, format=Format.JSON, type=Server)              # Server(host='0.0.0.0', port=8080)
+srv = eserde.loads(ini, format=Format.INI, type=Server, strict=False) # "8080" → 8080
+net = eserde.loads(src, type=Net, dec_hook=lambda t, v: t(v))         # custom fields inside type=
 ```
 
-Async — I/O and GIL-free native parsing off the event loop:
+| kwarg | effect |
+| --- | --- |
+| `format=` | required for `bytes`/`str`; inferred from a `Path` |
+| `type=` | validate into a Struct, dataclass, TypedDict, attrs or pydantic model; violations raise `LoadError` |
+| `strict=False` | msgspec coercion — the escape hatch INI needs |
+| `object_hook=` | rewrite every decoded mapping, innermost first (json semantics) |
+| `dec_hook=` | teach `type=` custom field types (requires `type=`) |
+| `registry=` | swap the default codec set |
+
+### dumps — encode
+
+```python
+raw = eserde.dumps({"name": "demian", "n": 42}, format=Format.YAML)
+# b'name: demian\n"n": 42\n'
+```
+
+```python
+from fractions import Fraction
+eserde.dumps({"f": Fraction(1, 2)}, format=Format.JSON, encoders={Fraction: str})  # b'{"f":"1/2"}'
+eserde.dumps({"f": Fraction(1, 2)}, format=Format.JSON, default=float)             # b'{"f":0.5}'
+```
+
+Every input is normalized through the Jsonable encoder first (datetime → ISO,
+`Enum` → value, `bytes` → base64), so each format sees the same tree.
+
+| kwarg | effect |
+| --- | --- |
+| `format=` | defaults to `Format.JSON` |
+| `encoders=` | exact-type hooks, ahead of every built-in; results are re-walked |
+| `default=` | json/orjson-style last resort for unknown types; none → `EncoderError` |
+| `registry=` | swap the default codec set |
+
+### load / dump — files
+
+```python
+cfg = eserde.load(Path("config.toml"))              # format from the .toml suffix
+
+with open("app.json", "rb") as fh:
+    data = eserde.load(fh, format=Format.JSON)      # an open handle needs the format
+
+eserde.dump(cfg, Path("out.jsonc"))                 # writes straight to disk → None
+```
+
+Same kwargs as `loads` / `dumps`.
+
+### async
+
+`aloads` · `adumps` · `aload` · `adump` — same signatures; I/O and the GIL-free native
+parse run off the event loop. The Rust codecs release the GIL, so concurrent `aloads`
+parallelizes decode across cores.
 
 ```python
 async def main():
     srv = await eserde.aloads(Path("config.yaml"), type=Server)
+    await eserde.adump(srv, Path("copy.json"))
 ```
 
-`strict=False` enables type coercion — the escape hatch INI needs. The full guide lives
-at [damvolkov.github.io/e-serde](https://damvolkov.github.io/e-serde/).
+### compat — `json` drop-in
+
+Frameworks duck-type the stdlib module (`json_serialize=`, renderers, formatters).
+`eserde.compat` speaks `json.dumps`/`json.loads` exactly, `str` output; behaviours
+e-serde cannot share faithfully delegate to the stdlib — slower, never a surprise.
+
+```python
+from eserde import compat
+compat.dumps({"a": 1}, ensure_ascii=False)       # '{"a":1}'   native compact utf-8
+compat.dumps({"a": 1})                           # byte-faithful to stdlib json
+compat.loads('{"a": 1.5}', parse_float=Decimal)  # delegated to stdlib, never guessed
+```
+
+Errors are the `LoaderError` family: `FormatError` (no/unknown format), `LoadError`
+(decode or validation), `DumpError` / `EncoderError` (encode), `CodecError` (backend
+missing). The full guide lives at [damvolkov.github.io/e-serde](https://damvolkov.github.io/e-serde/).
 
 ## Formats and backends
 
@@ -93,13 +153,13 @@ Median decode of a 100 KB config on CPython 3.14 (release build). Regenerate wit
 
 ![loads](assets/benchmarks/loads.png)
 
-| Format | e-serde | fastest rival          | margin                 |
-| ------ | ------- | ---------------------- | ---------------------- |
-| JSON   | 0.17 ms | orjson 0.16 ms         | ≈tie (uses msgspec)    |
-| YAML   | 2.24 ms | pyyaml (C) 5.3× slower | ruamel 66× slower      |
-| TOML   | 1.64 ms | rtoml 1.4× slower      | tomlkit 42× slower     |
-| JSONC  | 0.66 ms | pyjson5 *faster* ×0.6  | the one format behind   |
-| INI    | 1.87 ms | configparser 10× slower | —                     |
+| Format | e-serde | nearest rival | margin |
+| --- | --- | --- | --- |
+| JSON | 0.17 ms | orjson 0.16 ms | ≈ tie — same decoder (msgspec) |
+| YAML | 2.24 ms | pyyaml C 11.9 ms | 5.3× — ruamel 66× |
+| TOML | 1.64 ms | rtoml 2.27 ms | 1.4× — tomlkit 42× |
+| JSONC | 0.66 ms | pyjson5 0.39 ms | the one format behind (×0.6) |
+| INI | 1.87 ms | configparser 19.3 ms | 10× |
 
 Because the Rust codecs release the GIL, `aloads` parallelizes decode: on 10 MB YAML/TOML the
 async fan-out is ~2× faster than serial sync (JSON stays flat — msgspec's C decoder holds the
@@ -128,15 +188,10 @@ docs/                   mkdocs-material site
 Only the package root has an `__init__.py`; every subpackage is a namespace folder. Import
 boundaries are enforced by `tach`: `eserde` → `logic` → `backends` → `infra`/`_native`.
 
-Design rules:
-
-- `loads`/`dumps` operate on `bytes | str | Path`; `load`/`dump` on `Path` or binary handles.
-- `type=` routes the decoded tree through `msgspec.convert`: validation is msgspec's,
-  decoding is Rust's. `strict=False` enables coercion.
-- `dumps` normalizes through the Jsonable encoder first (datetime → ISO, Enum → value,
-  bytes → base64), so every format sees the same tree.
-- Round-trip losses are explicit: JSONC comments are dropped on dumps; TOML has no null;
-  YAML non-scalar keys and multi-document streams are rejected.
+Design rules: decoding is always Rust/C, validation is msgspec's or pydantic's —
+`type=` only routes the decoded tree. Round-trip losses are explicit: JSONC comments are
+dropped on dumps; TOML has no null; YAML non-scalar keys and multi-document streams are
+rejected.
 
 ## Development
 

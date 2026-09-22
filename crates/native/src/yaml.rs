@@ -2,10 +2,83 @@ use crate::convert::{py_to_value, value_to_py};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyModule;
-use saphyr::{LoadableYamlNode, Scalar, Yaml};
+use saphyr::LoadableYamlNode;
+use saphyr::{Scalar, Yaml};
+use saphyr_parser::{BufferedInput, Event, Parser};
 use serde_json::{Map, Value};
+use std::collections::HashMap;
+
+/// Cap on materialized nodes while flattening the `Rc`-shared alias graph:
+/// ordinary configs are orders of magnitude below this; exponential alias
+/// bombs abort on the first node past the budget instead of eating the RAM.
+const NODE_BUDGET: u64 = 5_000_000;
+const BUDGET_MSG: &str = "node budget exceeded (alias expansion?)";
+
+/// Predict the materialized size from the raw event stream (aliases are single
+/// events, so this scan stays linear in document text) and reject bombs before
+/// saphyr materializes the graph. Slot 0 doubles as saphyr's no-anchor
+/// sentinel, so its size is kept as a running maximum: the guard can
+/// overestimate, never underestimate.
+fn check_expansion(input: &str) -> Result<(), String> {
+    let mut parser = Parser::new(BufferedInput::new(input.chars()));
+    let mut anchor_size: HashMap<usize, u64> = HashMap::new();
+    let mut frames: Vec<(usize, u64)> = Vec::new();
+    while let Some(result) = parser.next_event() {
+        let (event, _) = result.map_err(|exc| exc.to_string())?;
+        match event {
+            Event::DocumentStart(_) => frames.push((usize::MAX, 0)),
+            Event::DocumentEnd => {
+                let (_, size) = frames
+                    .pop()
+                    .ok_or_else(|| "unbalanced document".to_string())?;
+                if size > NODE_BUDGET {
+                    return Err(BUDGET_MSG.to_string());
+                }
+            }
+            Event::Scalar(_, _, anchor, _) => {
+                merge_anchor(&mut anchor_size, anchor, 1);
+                add(&mut frames, 1)?;
+            }
+            Event::SequenceStart(anchor, _) | Event::MappingStart(anchor, _) => {
+                frames.push((anchor, 1))
+            }
+            Event::Alias(id) => {
+                let size = anchor_size.get(&id).copied().unwrap_or(1);
+                add(&mut frames, size)?;
+            }
+            Event::SequenceEnd | Event::MappingEnd => {
+                let (anchor, size) = frames
+                    .pop()
+                    .ok_or_else(|| "unbalanced container".to_string())?;
+                merge_anchor(&mut anchor_size, anchor, size);
+                add(&mut frames, size)?;
+            }
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
+fn merge_anchor(anchor_size: &mut HashMap<usize, u64>, anchor: usize, size: u64) {
+    if anchor == usize::MAX {
+        return;
+    }
+    let slot = anchor_size.entry(anchor).or_insert(0);
+    *slot = (*slot).max(size);
+}
+
+fn add(frames: &mut [(usize, u64)], size: u64) -> Result<(), String> {
+    if let Some(frame) = frames.last_mut() {
+        frame.1 += size;
+        if frame.1 > NODE_BUDGET {
+            return Err(BUDGET_MSG.to_string());
+        }
+    }
+    Ok(())
+}
 
 fn decode(input: &str) -> Result<Value, String> {
+    check_expansion(input)?;
     let mut docs = Yaml::load_from_str(input).map_err(|exc| exc.to_string())?;
     if docs.len() != 1 {
         return Err(format!(
@@ -13,27 +86,31 @@ fn decode(input: &str) -> Result<Value, String> {
             docs.len()
         ));
     }
-    yaml_to_value(docs.remove(0))
+    let mut budget = NODE_BUDGET;
+    yaml_to_value(docs.remove(0), &mut budget)
 }
 
-fn yaml_to_value(node: Yaml<'_>) -> Result<Value, String> {
+fn yaml_to_value(node: Yaml<'_>, budget: &mut u64) -> Result<Value, String> {
+    *budget = budget
+        .checked_sub(1)
+        .ok_or_else(|| BUDGET_MSG.to_string())?;
     let value = match node {
         Yaml::Value(scalar) => scalar_to_value(scalar)?,
         Yaml::Representation(text, _, _) => Value::String(text.into_owned()),
         Yaml::Sequence(items) => Value::Array(
             items
                 .into_iter()
-                .map(yaml_to_value)
+                .map(|item| yaml_to_value(item, budget))
                 .collect::<Result<Vec<_>, _>>()?,
         ),
         Yaml::Mapping(mapping) => {
             let mut map = Map::new();
             for (key, item) in mapping {
-                map.insert(key_to_string(key)?, yaml_to_value(item)?);
+                map.insert(key_to_string(key)?, yaml_to_value(item, budget)?);
             }
             Value::Object(map)
         }
-        Yaml::Tagged(_, inner) => yaml_to_value(*inner)?,
+        Yaml::Tagged(_, inner) => yaml_to_value(*inner, budget)?,
         other => return Err(format!("unsupported YAML node: {other:?}")),
     };
     Ok(value)

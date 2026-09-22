@@ -69,6 +69,7 @@ dependencies = [
  "pyo3",
  "rust-ini",
  "saphyr",
+ "saphyr-parser",
  "serde_json",
  "toml",
 ]
