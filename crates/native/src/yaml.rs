@@ -104,9 +104,23 @@ fn yaml_to_value(node: Yaml<'_>, budget: &mut u64) -> Result<Value, String> {
                 .collect::<Result<Vec<_>, _>>()?,
         ),
         Yaml::Mapping(mapping) => {
-            let mut map = Map::new();
+            let mut explicit: Vec<(String, Value)> = Vec::new();
+            let mut merges: Vec<Value> = Vec::new();
             for (key, item) in mapping {
-                map.insert(key_to_string(key)?, yaml_to_value(item, budget)?);
+                let name = key_to_string(key)?;
+                let value = yaml_to_value(item, budget)?;
+                if name == "<<" && matches!(value, Value::Object(_) | Value::Array(_)) {
+                    merges.push(value);
+                } else {
+                    explicit.push((name, value));
+                }
+            }
+            let mut map = Map::new();
+            for (key, value) in explicit {
+                map.insert(key, value);
+            }
+            for source in merges {
+                apply_merge(&mut map, source);
             }
             Value::Object(map)
         }
@@ -125,6 +139,26 @@ fn scalar_to_value(scalar: Scalar<'_>) -> Result<Value, String> {
         Scalar::String(text) => Value::String(text.into_owned()),
     };
     Ok(value)
+}
+
+/// YAML merge key (`<<`): explicit keys win; merged maps fill the gaps. Accepts a
+/// single map or a sequence of maps (earlier entries take precedence). Non-map
+/// values under `<<` are treated as literal keys upstream, so this only sees maps
+/// and arrays of maps.
+fn apply_merge(map: &mut Map<String, Value>, source: Value) {
+    match source {
+        Value::Object(obj) => {
+            for (key, value) in obj {
+                map.entry(key).or_insert(value);
+            }
+        }
+        Value::Array(items) => {
+            for item in items {
+                apply_merge(map, item);
+            }
+        }
+        _ => {}
+    }
 }
 
 fn key_to_string(key: Yaml<'_>) -> Result<String, String> {

@@ -89,12 +89,12 @@ def test_loads_yaml_tabs_rejected() -> None:
         (b"a: .inf\n", {"a": None}),
         (b"a: .nan\n", {"a": None}),
         (b"a: 1:30\n", {"a": "1:30"}),
-        (b"a: &x {k: 1}\nb: {<<: *x}\n", {"a": {"k": 1}, "b": {"<<": {"k": 1}}}),
+        (b"a: &x {k: 1}\nb: {<<: *x}\n", {"a": {"k": 1}, "b": {"k": 1}}),
         (b"a: !!python/object:os.system ['id']\n", {"a": ["id"]}),
         (b"~: 1\n", {"null": 1}),
         (b"a: 1\r\n", {"a": 1}),
     ],
-    ids=["inf-null", "nan-null", "sexagesimal-str", "merge-not-resolved", "python-tag-inert", "tilde-key", "crlf"],
+    ids=["inf-null", "nan-null", "sexagesimal-str", "merge-key-resolved", "python-tag-inert", "tilde-key", "crlf"],
 )
 def test_loads_yaml_core_schema(raw: bytes, expected: dict) -> None:
     assert loads(raw, format=Format.YAML) == expected
@@ -157,7 +157,8 @@ def test_loads_toml_rejects(raw: bytes) -> None:
 @pytest.mark.parametrize(
     ("raw", "expected"),
     [
-        (b"[a]\nk=1\n[a]\nj=2\n", {"a": {"j": "2"}}),
+        (b"[a]\nk=1\n[a]\nj=2\n", {"a": {"k": "1", "j": "2"}}),
+        (b"[a]\nk=1\n[a]\nk=2\nj=3\n", {"a": {"k": "2", "j": "3"}}),
         (b"[a]\nk==v\n", {"a": {"k": "=v"}}),
         (b"[a]\nk=x=y\n", {"a": {"k": "x=y"}}),
         (b"\xef\xbb\xbf[a]\nk=v\n", {"a": {"k": "v"}}),
@@ -165,7 +166,7 @@ def test_loads_toml_rejects(raw: bytes) -> None:
         (b"", {}),
         ("[d\u00e9bito]\nclave=valor\n".encode(), {"d\u00e9bito": {"clave": "valor"}}),
     ],
-    ids=["dup-section-merges", "double-equals", "value-with-equals", "bom-ok", "crlf", "empty-ok", "unicode"],
+    ids=["dup-section-merges", "dup-key-override", "double-equals", "value-with-equals", "bom-ok", "crlf", "empty-ok", "unicode"],
 )
 def test_loads_ini_ok(raw: bytes, expected: dict) -> None:
     assert loads(raw, format=Format.INI) == expected

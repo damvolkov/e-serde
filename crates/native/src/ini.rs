@@ -2,13 +2,18 @@ use ini::Ini;
 use pyo3::exceptions::{PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyModule};
+use std::collections::HashMap;
 
 type Sections = Vec<(String, Vec<(String, String)>)>;
 
 fn decode(input: &str) -> Result<Sections, String> {
     let input = input.trim_start_matches('\u{feff}');
     let conf = Ini::load_from_str(input).map_err(|exc| exc.to_string())?;
-    let mut sections: Sections = Vec::new();
+    // rust-ini stores sections in an ordered multimap: repeated `[x]` blocks are
+    // separate entries. Fold them by name so a re-opened section merges into the
+    // first (configparser semantics) instead of replacing it and dropping keys.
+    let mut merged: Sections = Vec::new();
+    let mut slots: HashMap<String, usize> = HashMap::new();
     for (name, props) in conf.iter() {
         if props.iter().next().is_none() {
             continue;
@@ -16,13 +21,19 @@ fn decode(input: &str) -> Result<Sections, String> {
         let Some(section) = name else {
             return Err("keys found outside of any section".to_string());
         };
-        let items = props
-            .iter()
-            .map(|(key, value)| (key.to_string(), value.to_string()))
-            .collect();
-        sections.push((section.to_string(), items));
+        let slot = *slots.entry(section.to_string()).or_insert_with(|| {
+            merged.push((section.to_string(), Vec::new()));
+            merged.len() - 1
+        });
+        for (key, value) in props.iter() {
+            let body = &mut merged[slot].1;
+            match body.iter_mut().find(|(existing, _)| existing == key) {
+                Some(entry) => entry.1 = value.to_string(),
+                None => body.push((key.to_string(), value.to_string())),
+            }
+        }
     }
-    Ok(sections)
+    Ok(merged)
 }
 
 fn scalar_to_text(value: &Bound<'_, PyAny>) -> PyResult<String> {
