@@ -18,3 +18,4 @@ saphyr-parser = { workspace = true }
 toml = { workspace = true }
 jsonc-parser = { workspace = true }
 rust-ini = { workspace = true }
+csv = "1.4.0"

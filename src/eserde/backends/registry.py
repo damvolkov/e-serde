@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from eserde.backends.msgspec.json import MsgspecJsonCodec
+from eserde.backends.native.csv import NativeCsvCodec, NativeTsvCodec
 from eserde.backends.native.ini import NativeIniCodec
 from eserde.backends.native.jsonc import NativeJsoncCodec
 from eserde.backends.native.toml import NativeTomlCodec
@@ -66,6 +67,8 @@ _DEFAULT_CODECS: tuple[Codec, ...] = (
     NativeYamlCodec(),
     NativeTomlCodec(),
     NativeIniCodec(),
+    NativeCsvCodec(),
+    NativeTsvCodec(),
 )
 
 

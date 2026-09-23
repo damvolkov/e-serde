@@ -52,16 +52,25 @@ def _null(fmt: Format) -> bool:
         Format.YAML: b"k:\n",
         Format.TOML: b"k = null\n",
         Format.INI: b"[s]\nk = null\n",
+        Format.CSV: b"k,j\n,\n",
+        Format.TSV: b"k\tj\n\t\n",
     }[fmt]
-    return _safe(lambda: loads(raw, format=fmt) == {"k": None})
+    return _safe(lambda: loads(raw, format=fmt) in ({"k": None}, [{"k": None, "j": None}]))
+
+
+_TABLE_FORMATS = {Format.CSV, Format.TSV}
 
 
 def _nonfinite(fmt: Format) -> bool:
+    if fmt in _TABLE_FORMATS:
+        return _safe(lambda: loads(b"k\ninf\n", format=fmt) == [{"k": math.inf}])
     return _safe(lambda: loads(dumps({"k": math.inf}, format=fmt), format=fmt)["k"] == math.inf)
 
 
 def _bignum(fmt: Format) -> bool:
     digits = int("9" * 40)
+    if fmt in _TABLE_FORMATS:
+        return _safe(lambda: loads(f"k\n{digits}\n".encode(), format=fmt) == [{"k": digits}])
     return _safe(lambda: loads(dumps({"k": digits}, format=fmt), format=fmt)["k"] == digits)
 
 
@@ -72,8 +81,10 @@ def _comments(fmt: Format) -> bool:
         Format.YAML: b"k: 1 # c",
         Format.TOML: b"# c\nk = 1\n",
         Format.INI: b"; c\n[s]\nk = 1\n",
+        Format.CSV: b"k\n1 # c\n",
+        Format.TSV: b"k\n1 # c\n",
     }[fmt]
-    return _safe(lambda: loads(raw, format=fmt) in ({"k": 1}, {"s": {"k": "1"}}))
+    return _safe(lambda: loads(raw, format=fmt) in ({"k": 1}, {"s": {"k": "1"}}, [{"k": 1}]))
 
 
 def _trailing(fmt: Format) -> bool:
@@ -83,6 +94,8 @@ def _trailing(fmt: Format) -> bool:
         Format.YAML: b"[1, 2,]\n",
         Format.TOML: b"a = [1, 2,]\n",
         Format.INI: b"[s]\nk = [1, 2,]\n",
+        Format.CSV: b"a,b\n1,2,\n",
+        Format.TSV: b"a\tb\n1\t2,\n",
     }[fmt]
     return _safe(lambda: loads(raw, format=fmt) in ([1, 2], {"a": [1, 2]}))
 
@@ -102,8 +115,10 @@ def _bom(fmt: Format) -> bool:
         Format.YAML: b"k: 1\n",
         Format.TOML: b"k = 1\n",
         Format.INI: b"[s]\nk = 1\n",
+        Format.CSV: b"k\n1\n",
+        Format.TSV: b"k\n1\n",
     }[fmt]
-    return _safe(lambda: loads(b"\xef\xbb\xbf" + payload, format=fmt) in ({"k": 1}, {"s": {"k": "1"}}))
+    return _safe(lambda: loads(b"\xef\xbb\xbf" + payload, format=fmt) in ({"k": 1}, {"s": {"k": "1"}}, [{"k": 1}]))
 
 
 def _merge_dup_sections(fmt: Format) -> bool:

@@ -1,4 +1,5 @@
 mod convert;
+mod csv;
 mod ini;
 mod jsonc;
 mod toml;
@@ -9,8 +10,10 @@ use pyo3::types::PyModule;
 
 type Register = fn(&Bound<'_, PyModule>) -> PyResult<()>;
 
-const SUBMODULES: [(&str, Register); 4] = [
+const SUBMODULES: [(&str, Register); 6] = [
     ("yaml", yaml::register),
+    ("csv", csv::register),
+    ("tsv", csv::register_tsv),
     ("toml", toml::register),
     ("jsonc", jsonc::register),
     ("ini", ini::register),

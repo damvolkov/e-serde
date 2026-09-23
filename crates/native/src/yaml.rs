@@ -1,4 +1,4 @@
-use crate::convert::{node_to_py, py_to_node, Node};
+use crate::convert::{Node, node_to_py, py_to_node};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyModule;
@@ -38,7 +38,9 @@ fn check_expansion(input: &str) -> Result<(), String> {
                 merge_anchor(&mut anchor_size, anchor, 1);
                 add(&mut frames, 1)?;
             }
-            Event::SequenceStart(anchor, _) | Event::MappingStart(anchor, _) => frames.push((anchor, 1)),
+            Event::SequenceStart(anchor, _) | Event::MappingStart(anchor, _) => {
+                frames.push((anchor, 1))
+            }
             Event::Alias(id) => {
                 let size = anchor_size.get(&id).copied().unwrap_or(1);
                 add(&mut frames, size)?;
@@ -208,7 +210,12 @@ fn emit_mapping(entries: &[(String, Node)], indent: usize, out: &mut String) {
     emit_mapping_padded(entries, indent, true, out);
 }
 
-fn emit_mapping_padded(entries: &[(String, Node)], indent: usize, pad_first: bool, out: &mut String) {
+fn emit_mapping_padded(
+    entries: &[(String, Node)],
+    indent: usize,
+    pad_first: bool,
+    out: &mut String,
+) {
     let pad = " ".repeat(indent);
     for (position, (key, item)) in entries.iter().enumerate() {
         if position > 0 || pad_first {

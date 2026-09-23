@@ -24,6 +24,15 @@ LIMITS = {
         "Multi-document streams are rejected: one document per load.",
         "Exponential alias expansion (billion laughs) is rejected by a materialization budget instead of eating the machine.",
     ],
+    Format.CSV: [
+        "Header required: the first row names the columns; records decode to `list[dict]`.",
+        "Empty fields are `null`; ragged rows are rejected, never padded.",
+        "Mixed kinds demote a column to strings (polars semantics); a float in an integer column widens it to doubles, big integers stay exact only while the column is integral.",
+    ],
+    Format.TSV: [
+        "Tab is the only difference from CSV — quoted fields may still contain tabs.",
+        "Same header, null, ragged and inference rules as CSV.",
+    ],
     Format.TOML: [
         "No null type: `None` cannot be encoded.",
         "Integers are 64-bit by spec: values beyond `i64` raise `DumpError` rather than corrupt.",
@@ -53,6 +62,8 @@ BACKEND = {
     Format.YAML: "NativeYamlCodec",
     Format.TOML: "NativeTomlCodec",
     Format.INI: "NativeIniCodec",
+    Format.CSV: "NativeCsvCodec",
+    Format.TSV: "NativeTsvCodec",
 }
 ABSENT = "outside this format's contract"
 
@@ -64,6 +75,8 @@ def snippet(fmt: Format) -> str:
         Format.YAML: "eserde.loads(b\"base: &b {x: 1}\\ndoc:\\n  <<: *b\\n  y: 2\\n\", format=Format.YAML)\n# {'base': {'x': 1}, 'doc': {'y': 2, 'x': 1}}",
         Format.TOML: "eserde.loads(b'speed = inf\\n', format=Format.TOML)\n# {'speed': inf}   — and .nan survives the round-trip",
         Format.INI: "eserde.loads(b\"[s]\\nport = 8080\\n\", format=Format.INI, type=dict[str, Svc], strict=False)\n# {'s': Svc(port=8080)}   — strings coerced by the schema",
+        Format.CSV: "eserde.loads(b'id,name\\n1,Turul\\n', format=Format.CSV)\n# [{'id': 1, 'name': 'Turul'}]   — records with per-column inference",
+        Format.TSV: "eserde.loads(b'id\\tname\\n1\\tTurul\\n', format=Format.TSV)\n# [{'id': 1, 'name': 'Turul'}]   — same codec, tab-delimited",
     }[fmt]
 
 

@@ -91,7 +91,10 @@ pub fn py_to_node(obj: &Bound<'_, PyAny>) -> PyResult<Node> {
 }
 
 fn sequence_to_node<'a>(items: impl Iterator<Item = Bound<'a, PyAny>>) -> PyResult<Node> {
-    items.map(|item| py_to_node(&item)).collect::<PyResult<Vec<_>>>().map(Node::Seq)
+    items
+        .map(|item| py_to_node(&item))
+        .collect::<PyResult<Vec<_>>>()
+        .map(Node::Seq)
 }
 
 pub fn to_json_string(node: &Node) -> String {

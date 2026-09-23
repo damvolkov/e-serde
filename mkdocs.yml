@@ -74,5 +74,7 @@ nav:
       - YAML: formats/yaml.md
       - TOML: formats/toml.md
       - INI: formats/ini.md
+      - CSV: formats/csv.md
+      - TSV: formats/tsv.md
   - Reference: reference.md
   - Benchmarks: benchmarks.md

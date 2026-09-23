@@ -13,6 +13,8 @@ class _FormatModule:
     def dumps(self, obj: Any) -> str: ...
 
 yaml: _FormatModule
+csv: _FormatModule
+tsv: _FormatModule
 toml: _FormatModule
 jsonc: _FormatModule
 ini: _FormatModule
