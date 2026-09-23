@@ -10,17 +10,19 @@ same bytes every rival parses. The rivals are each library's *own* recommended A
 
 ![loads](assets/benchmarks/loads.png)
 
-| Format | e-serde | orjson     | msgspec    | pyyaml(C)  | rtoml      | configparser |
-| ------ | ------- | ---------- | ---------- | ---------- | ---------- | ------------ |
-| JSON   | 0.17 ms | 0.16 ms    | 0.17 ms    | —          | —          | —            |
-| YAML   | 2.24 ms | —          | —          | 11.9 ms    | —          | —            |
-| TOML   | 1.64 ms | —          | —          | —          | 2.27 ms    | —            |
-| INI    | 1.87 ms | —          | —          | —          | —          | 19.3 ms      |
+| Format | e-serde | orjson     | msgspec    | pyyaml(C) | rtoml      | configparser |
+| ------ | ------- | ---------- | ---------- | --------- | ---------- | ------------ |
+| JSON   | 0.17 ms | 0.17 ms    | 0.17 ms    | —         | —          | —            |
+| YAML   | 2.20 ms | —          | —          | 12.6 ms   | —          | —            |
+| TOML   | 1.53 ms | —          | —          | —         | 2.29 ms    | —            |
+| INI    | 2.00 ms | —          | —          | —         | —          | 22.3 ms      |
 
 - **JSON** — a tie by construction: e-serde *is* msgspec here. The C decoder holds the GIL.
-- **YAML** — 5.3× faster than PyYAML's C loader, 66× faster than ruamel.
+- **YAML** — ≈6× faster than PyYAML's C loader, 66× faster than ruamel. The billion-laughs
+  pre-scan runs only when the input contains `&`, so unanchored docs pay nothing for it.
 - **TOML** — ahead of rtoml, its nearest Rust rival, and 40×+ over the pure-Python parsers.
-- **JSONC** — the one format e-serde does not lead: `pyjson5` (Rust, dedicated) beats it ~×0.6.
+- **JSONC** — the one format e-serde does not lead: `pyjson5` (Rust, dedicated) beats it
+  ~×0.5. The gap is the price of exact big integers and raw number tokens (0.2.1 onward).
 
 ## Validate (`type=`)
 

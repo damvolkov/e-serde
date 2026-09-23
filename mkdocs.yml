@@ -36,6 +36,11 @@ extra:
     - icon: fontawesome/brands/github
       link: https://github.com/damvolkov
 
+exclude_docs: |
+    substack.md
+    linkedin.md
+    assets/**/*.md
+
 extra_css:
   - stylesheets/extra.css
 
