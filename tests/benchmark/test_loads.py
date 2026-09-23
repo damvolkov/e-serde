@@ -20,4 +20,4 @@ def test_loads(benchmark: BenchmarkFixture, fmt: str, size: str, rival: str) -> 
     format_ = Format(fmt)
     data = payload(format_, size)
     decoded: Any = benchmark(LOAD_RIVALS[format_][rival], data)
-    assert isinstance(decoded, dict)
+    assert isinstance(decoded, dict | list)
