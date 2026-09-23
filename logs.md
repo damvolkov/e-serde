@@ -1,0 +1,2 @@
+- [2026-09-22T16:05] Pattern : multi-codec hole enumeration methodology captured — systematic per-codec probe for precision loss, silent data loss, unresolved features across serialization libraries. Avoids ad-hoc checking.
+- [2026-09-22T16:05] Pattern : multi-codec hole enumeration methodology captured — systematic per-codec probe for precision loss, silent data loss, unresolved features across serialization libraries. Avoids ad-hoc checking.

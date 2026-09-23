@@ -8,6 +8,21 @@ This file is maintained automatically: the release workflow appends the notes of
 every tagged version, and a CI test fails if the head of this file ever disagrees
 with `Cargo.toml`.
 
+## [0.2.1] — 2026-09-23
+
+- perf(yaml): the billion-laughs pre-scan only runs on documents that
+  contain anchors (`&`); alias-free configs keep the old 2.2 ms/100 KB.
+- feat(release): the bump commit now carries its own CHANGELOG section and
+  GitHub-release notes; a CI tripwire fails if CHANGELOG and Cargo.toml drift.
+- fix(release): compute the next version from the semver-max of remote tags
+  (`git describe` is blind to the orphaned 0.2.0 bump); tag v0.1.1 — a bogus
+  patch produced by that blindness — was withdrawn from tags and releases.
+- fix(ci): restore the v0.2.0 version bump that the release flow never pushed
+  (the workflow guard swallowed every bump push to protected main).
+- docs: benchmark tables and charts regenerated for the lossless-Node
+  emitters (JSONC/TOML/YAML/INI dumps ~25% faster); launch posts live outside
+  the site build.
+
 ## [0.2.0] — 2026-09-23
 
 ### Added
