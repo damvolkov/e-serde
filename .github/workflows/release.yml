@@ -47,8 +47,9 @@ jobs:
           GIVEN: ${{ inputs.tag }}
         run: |
           if [ -n "$GIVEN" ]; then echo "tag=$GIVEN" >> "$GITHUB_OUTPUT"; exit 0; fi
-          if git describe --tags --abbrev=0 >/dev/null 2>&1; then
-            IFS=. read -r M m p <<< "$(git describe --tags --abbrev=0 | sed 's/^v//')"
+          LATEST=$(git ls-remote --tags origin 'refs/tags/v*' | sed -E 's#.*/v##; s/\^\{\}$//' | sort -V | tail -1)
+          if [ -n "$LATEST" ]; then
+            IFS=. read -r M m p <<< "$LATEST"
             case "$BUMP" in
               major) M=$((M+1)); m=0; p=0 ;;
               minor) m=$((m+1)); p=0 ;;
@@ -66,13 +67,13 @@ jobs:
           sed -i "0,/^version = \"[0-9]*\.[0-9]*\.[0-9]*\"/s//version = \"${TAG#v}\"/" Cargo.toml
           cargo update --workspace
           uv lock
-          PREV=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-          RANGE=${PREV:+$PREV..HEAD}
+          PREV=$(git ls-remote --tags origin 'refs/tags/v*' | sed -E 's#.*/v##; s/\^\{\}$//' | sort -V | grep -vx "${TAG#v}" | tail -1)
+          RANGE=${PREV:+v$PREV..HEAD}
           { printf '## [%s] — %s\n\n' "${TAG#v}" "$(date -u +%Y-%m-%d)"; git log --no-merges --pretty='- %s' $RANGE | grep -vE '^- chore\(release\)' | sed '/^-$/d'; printf '\n'; } > /tmp/entry.md
           awk 'NR==1{print;next} /^## \[/{if(!done){while((getline l<"/tmp/entry.md"))print l;done=1}print;next}{print}' CHANGELOG.md > /tmp/changelog.md && mv /tmp/changelog.md CHANGELOG.md
           git add Cargo.toml Cargo.lock uv.lock CHANGELOG.md
-          git diff --cached --quiet || git commit -m "chore(release): $TAG"
-          git diff --cached --quiet || git push origin main
+          git commit -m "chore(release): $TAG"
+          git push origin main
           git tag "$TAG"
           git push origin "$TAG"
       - name: GitHub release
