@@ -8,6 +8,11 @@ This file is maintained automatically: the release workflow appends the notes of
 every tagged version, and a CI test fails if the head of this file ever disagrees
 with `Cargo.toml`.
 
+## [0.3.0] — 2026-09-23
+
+- feat: content embedding and CSV/TSV codecs (#22)
+- fix(release): land the bump through a self-merging PR; exact CHANGELOG notes extraction; drop logs.md from tracking (#21)
+
 ## [0.2.1] — 2026-09-23
 
 - perf(yaml): the billion-laughs pre-scan only runs on documents that
