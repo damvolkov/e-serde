@@ -1,4 +1,4 @@
-.PHONY: build build-release test lint format types arch check cargo-fmt clean release bench docs docs-serve
+.PHONY: build build-release test lint format types arch check cargo-fmt clean release bench docs docs-serve docs-formats stress
 
 build:            ## compile native extension into the venv (debug)
 	uv run maturin develop
@@ -49,3 +49,6 @@ docs:             ## build the documentation (strict, fails on broken links)
 
 docs-formats:     ## regenerate docs/formats/*.md from the STANDARDS contract
 	uv run python tools/gen_formats.py
+
+stress:           ## comparative concurrency stress sweep -> assets/benchmarks/stress-*
+	uv run python tools/stress.py
