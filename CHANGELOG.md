@@ -3,10 +3,52 @@
 All notable changes to e-serde are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-Versions are tagged as `vX.Y.Z`; after the first automated release this file is
-maintained by release-plz from conventional commits.
 
-## [0.1.0] — 2026-09-16
+This file is maintained automatically: the release workflow appends the notes of
+every tagged version, and a CI test fails if the head of this file ever disagrees
+with `Cargo.toml`.
+
+## [0.2.0] — 2026-09-23
+
+### Added
+
+- Custom-encoder contract: per-call `default=` and `encoders=` on
+  `dumps/dump/adumps/adump`, `object_hook=`/`dec_hook=` on the decode side
+  (json/orjson/msgspec semantics, keyword-only).
+- `type=` validates pydantic models and generics (`list[M]`, `dict[str, M]`)
+  through a lazily imported, cached `TypeAdapter`; violations surface as `LoadError`.
+- `eserde.compat`: drop-in `json.dumps`/`json.loads` surface for frameworks that
+  duck-type the stdlib module — byte-faithful by default, native compact utf-8
+  fast path on `ensure_ascii=False`.
+- `eserde.STANDARDS`: machine-readable per-format spec contract (spec, pinned
+  engine + version, capability set) with the `test_standards.py` matrix that
+  executes every claim both ways and cross-checks engine versions against the
+  lockfiles.
+- Comparative concurrency stress sweep (`make stress`): throughput, p99 and peak
+  RSS versus worker count, with per-format charts and report under
+  `assets/benchmarks/`.
+- Docs: per-format pages generated from the contract; modular `Formats` section.
+
+### Fixed
+
+- Lossless `Node` tree replaces the `serde_json::Value` intermediate across the
+  Rust codecs: big integers and `inf`/`nan` round-trip exactly where the format
+  allows (TOML raises beyond its 64-bit range; JSON maps non-finites to `null`).
+- Duplicate INI sections merge instead of silently dropping earlier keys.
+- YAML merge keys (`<<`) resolve; explicit keys win.
+- YAML and INI tolerate a leading UTF-8 BOM (INI previously rejected the file;
+  YAML folded the BOM into the first key).
+- Lone surrogates on encode raise `DumpError` instead of escaping the hierarchy.
+- Empty JSONC documents are rejected.
+
+### Known limitations
+
+- YAML loads integers beyond 64-bit as `float` (engine resolves them that way);
+  `dumps` always writes exact digits.
+- saphyr pinned to 0.0.12: 0.1.0 regressed spec null semantics (empty node →
+  `""`); the STANDARDS test-suite re-verifies on any future bump.
+
+## [0.1.0] — 2026-09-17
 
 Initial release.
 
@@ -21,6 +63,4 @@ Initial release.
   enables coercion.
 - Jsonable dump encoder (datetime → ISO, Enum → value, bytes → base64).
 - Pluggable `CodecRegistry`; `e-serde` CLI listing active backends.
-- Rival benchmark matrix (orjson, ujson, PyYAML, ruamel, rtoml, tomllib,
-  tomlkit, pyjson5, json5, configparser, msgspec, pydantic) with matplotlib
-  report.
+- Rival benchmark matrix with matplotlib report.
