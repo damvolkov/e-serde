@@ -64,7 +64,7 @@ _DRIVES: dict[str, Drive] = {
 
 
 @pytest.mark.parametrize("drive", list(_DRIVES))
-@pytest.mark.parametrize("fmt", ["json", "jsonc", "yaml", "toml"])
+@pytest.mark.parametrize("fmt", ["json", "jsonc", "yaml", "toml", "csv"])
 @pytest.mark.parametrize("size", ["100kb", "10mb"])
 def test_aloads(benchmark: BenchmarkFixture, fmt: str, size: str, drive: str, corpus_files: Files) -> None:
     outputs = benchmark(_DRIVES[drive], Format(fmt), size, corpus_files)
