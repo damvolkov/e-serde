@@ -120,6 +120,46 @@ asyncio.run(main())
     cores — on 10 MB YAML/TOML the fan-out is ~2× faster than serial sync. JSON runs on
     msgspec's C decoder, which holds the GIL, so it stays flat. See [Benchmarks](benchmarks.md).
 
+## CSV and TSV — tables, typed
+
+```python
+rows = eserde.loads(b'id,name,qty\n1,Turul,3\n2,Ainulindale,\n', format=Format.CSV)
+# [{'id': 1, 'name': 'Turul', 'qty': 3}, {'id': 2, 'name': 'Ainulindale', 'qty': None}]
+```
+
+The header names the columns; **every column is type-inferred across its values**, polars-style:
+integers widen only when the data demands it, empty fields become `None`, and integers past i64
+stay exact. Quoted multi-line fields, `\r\n` and a leading BOM are all handled. Ragged rows and
+duplicate header names are rejected, never repaired. `dumps` writes RFC 4180 from a non-empty
+`list[dict]` (the first record's key order is the header); `Format.TSV` is the same codec, tab-delimited.
+Under `type=list[MyStruct]` the inferred records convert directly.
+
+## embed — content references
+
+A document can index prose instead of holding it:
+
+```yaml
+# doc.yaml
+title: Guía de instalación
+content:
+  format: markdown
+  source: ./content/guia.md      # a real .md file, resolved at load
+```
+
+```python
+import eserde
+from pathlib import Path
+
+doc = eserde.loads(Path("doc.yaml"), embed=True)
+doc["content"]["source"]  # the full text of content/guia.md
+```
+
+`embed=True` resolves every `source` key; `embed=("path", "body")` names the keys. References
+must point at plain `.md` files, are resolved against the document's own directory (or `root=`
+for `bytes`/`str` sources) and confined inside it — `../` and absolute escapes raise `LoadError`.
+A sibling `format:` must say `markdown`. The embedding is copy-on-write and all-or-nothing: a
+broken reference never returns a half-built tree. Works in every format and in the async twins.
+
 ## object_hook and dec_hook
 
 `object_hook` post-processes every decoded mapping (innermost first, json semantics).

@@ -46,7 +46,8 @@ def test_column_kinds(fmt: Format) -> None:
     assert [r["f"] for r in rows] == [1.5, 2.0]
     assert rows[0]["big"] == 99_000_000_000_000_000_000_000
     assert rows[1]["big"] == 3
-    assert rows[0]["t"] is True and rows[1]["t"] is False
+    assert rows[0]["t"] is True
+    assert rows[1]["t"] is False
     assert [r["s"] for r in rows] == ["x", "y"]
     assert [r["mixed"] for r in rows] == ["1", "z"]
     assert [r["allnull"] for r in rows] == [None, None]
@@ -56,7 +57,8 @@ def test_column_kinds(fmt: Format) -> None:
 def test_inf_token_infers_float_column(fmt: Format) -> None:
     raw = b"k\ninf\n"
     rows = loads(raw, format=fmt)
-    assert math.isinf(rows[0]["k"]) and rows[0]["k"] > 0
+    assert math.isinf(rows[0]["k"])
+    assert rows[0]["k"] > 0
 
 
 @pytest.mark.parametrize("fmt", [Format.CSV, Format.TSV])
