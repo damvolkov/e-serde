@@ -12,6 +12,8 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      - dependency-name: "saphyr*"  # pinned: 0.1.0 spec regression, revisit upstream
     groups:
       rust:
         patterns: ["*"]
