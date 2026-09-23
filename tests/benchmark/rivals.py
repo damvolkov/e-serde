@@ -8,6 +8,7 @@ Each adapter receives the payload the way real callers would hand it over (some 
 from __future__ import annotations
 
 import configparser
+import csv as stdlib_csv
 import io
 import json
 import tomllib
@@ -17,6 +18,7 @@ from typing import Any
 import json5
 import msgspec
 import orjson
+import polars
 import pyjson5
 import rtoml
 import simplejson
@@ -56,6 +58,21 @@ def _str_loads(fn: Callable[[str], Any]) -> Decode:
 
 def _str_encode(fn: Callable[[Any], str]) -> Encode:
     return lambda obj: fn(obj).encode()
+
+
+def _polars_loads(separator: str) -> Decode:
+    def decode(data: bytes) -> Any:
+        return polars.read_csv(io.BytesIO(data), separator=separator).to_dicts()
+
+    return decode
+
+
+def _polars_dumps(rows: list[dict[str, Any]]) -> bytes:
+    return polars.DataFrame(rows).write_csv().encode()
+
+
+def _stdlib_csv_loads(data: bytes) -> Any:
+    return list(stdlib_csv.DictReader(io.StringIO(data.decode())))
 
 
 def _configparser_loads(data: bytes) -> dict[str, dict[str, str]]:
@@ -137,6 +154,15 @@ LOAD_RIVALS: dict[Format, dict[str, Decode]] = {
         "configparser": _configparser_loads,
         "e-serde": _serde_loads(Format.INI),
     },
+    Format.CSV: {
+        "stdlib-csv": _stdlib_csv_loads,
+        "polars": _polars_loads(","),
+        "e-serde": _serde_loads(Format.CSV),
+    },
+    Format.TSV: {
+        "polars": _polars_loads("\t"),
+        "e-serde": _serde_loads(Format.TSV),
+    },
 }
 
 DUMP_RIVALS: dict[Format, dict[str, Encode]] = {
@@ -167,6 +193,14 @@ DUMP_RIVALS: dict[Format, dict[str, Encode]] = {
     Format.INI: {
         "configparser": _configparser_dumps,
         "e-serde": _serde_dumps(Format.INI),
+    },
+    Format.CSV: {
+        "polars": _polars_dumps,
+        "e-serde": _serde_dumps(Format.CSV),
+    },
+    Format.TSV: {
+        "polars": _polars_dumps,
+        "e-serde": _serde_dumps(Format.TSV),
     },
 }
 

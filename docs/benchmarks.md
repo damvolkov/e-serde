@@ -23,6 +23,9 @@ same bytes every rival parses. The rivals are each library's *own* recommended A
 - **TOML** — ahead of rtoml, its nearest Rust rival, and 40×+ over the pure-Python parsers.
 - **JSONC** — the one format e-serde does not lead: `pyjson5` (Rust, dedicated) beats it
   ~×0.5. The gap is the price of exact big integers and raw number tokens (0.2.1 onward).
+- **CSV** — polars builds a DataFrame (its whole reason to exist); e-serde reaches the same
+  `list[dict]` with per-column inference, faster, and GIL-detached. Encoding stays polars'
+  advantage (a native Arrow writer): ~×1.8 behind on dumps, an honest trade for a config library.
 
 ## Validate (`type=`)
 

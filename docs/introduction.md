@@ -25,6 +25,7 @@ The codecs are not reimplemented here; they are the state of the art, wrapped:
 | TOML         | toml (toml-rs org)                       | Rust     |
 | JSONC        | jsonc-parser (from Deno)                 | Rust     |
 | INI          | rust-ini                                 | Rust     |
+| CSV · TSV    | csv (BurntSushi)                         | Rust     |
 | Validation   | msgspec.convert (Structs/dataclasses)    | C        |
 
 Everything Rust lives in a single PyO3 extension module, compiled by `maturin`, released

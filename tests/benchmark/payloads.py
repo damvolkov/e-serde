@@ -10,6 +10,7 @@ TOML drops the `null_value` key — the format has no null, see `test_resources.
 from __future__ import annotations
 
 import configparser
+import csv
 import io
 import json
 from functools import cache
@@ -33,7 +34,73 @@ _RESOURCE_NAMES: dict[Format, str] = {
     Format.YAML: "sample.yaml",
     Format.TOML: "sample.toml",
     Format.INI: "sample.ini",
+    Format.CSV: "sample.csv",
+    Format.TSV: "sample.tsv",
 }
+
+_TABLE: list[dict[str, Any]] = [
+    {
+        "sku": "VLN-001",
+        "name": "Silmaril shard",
+        "qty": 3,
+        "price": 9.9,
+        "active": True,
+        "notes": None,
+        "checksum": 9_007_199_254_740_993,
+    },
+    {
+        "sku": "VLN-002",
+        "name": 'Gauntlet, "of" Fëanor',
+        "qty": -1,
+        "price": None,
+        "active": False,
+        "notes": "handle\nwith\ncare",
+        "checksum": 12345678901234567890123,
+    },
+    {
+        "sku": "LOT-014",
+        "name": "Mithril ring",
+        "qty": 12,
+        "price": 42.0,
+        "active": True,
+        "notes": 'says "hello", world',
+        "checksum": 42,
+    },
+    {
+        "sku": "LOT-015",
+        "name": "Phial of Eärendil",
+        "qty": 0,
+        "price": 7.25,
+        "active": False,
+        "notes": None,
+        "checksum": -99999999999999999999999,
+    },
+    {
+        "sku": "NRD-001",
+        "name": "colon: inside",
+        "qty": 7,
+        "price": None,
+        "active": True,
+        "notes": "ux, ördög, 日本語",
+        "checksum": 1,
+    },
+]
+
+
+def _csv_cell(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    return str(value)
+
+
+def _csv_render(rows: list[dict[str, Any]], delimiter: str) -> bytes:
+    buf = io.StringIO()
+    writer = csv.writer(buf, delimiter=delimiter, lineterminator="\n")
+    writer.writerow(rows[0])
+    writer.writerows([_csv_cell(value) for value in row.values()] for row in rows)
+    return buf.getvalue().encode()
 
 
 def _resource(fmt: Format) -> Path:
@@ -42,6 +109,8 @@ def _resource(fmt: Format) -> Path:
 
 @cache
 def _base_tree(fmt: Format) -> Any:
+    if fmt in (Format.CSV, Format.TSV):
+        return [dict(row) for row in _TABLE]
     if fmt is Format.INI:
         return _read_ini(_resource(fmt).read_bytes())
     tree = json.loads(_resource(Format.JSON).read_bytes())
@@ -68,6 +137,12 @@ def _clone(value: Any, generation: int) -> Any:
 
 def _scale(fmt: Format, reps: int) -> Any:
     base = _base_tree(fmt)
+    if fmt in (Format.CSV, Format.TSV):
+        return [
+            {**row, "sku": f"{row['sku']}-{gen:03d}", "qty": int(row["qty"]) + gen}
+            for gen in range(reps + 1)
+            for row in base
+        ]
     if fmt is Format.INI:
         scaled = {key: value for key, value in base.items() if not key.startswith("entry.")}
         sections = {key: value for key, value in base.items() if key.startswith("entry.")}
@@ -126,6 +201,8 @@ _RENDERERS: dict[Format, Callable[[Any], bytes]] = {
     Format.YAML: _yaml_render,
     Format.TOML: _toml_render,
     Format.INI: _ini_render,
+    Format.CSV: lambda tree: _csv_render(tree, ","),
+    Format.TSV: lambda tree: _csv_render(tree, "\t"),
 }
 
 

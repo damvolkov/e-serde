@@ -21,6 +21,8 @@ class Format(StrEnum):
     YAML = auto()
     TOML = auto()
     INI = auto()
+    CSV = auto()
+    TSV = auto()
 
 
 _EXTENSION_TO_FORMAT: dict[str, Format] = {
@@ -32,6 +34,8 @@ _EXTENSION_TO_FORMAT: dict[str, Format] = {
     ".ini": Format.INI,
     ".cfg": Format.INI,
     ".conf": Format.INI,
+    ".csv": Format.CSV,
+    ".tsv": Format.TSV,
 }
 
 

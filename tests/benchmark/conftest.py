@@ -23,6 +23,8 @@ _FILE_EXT: dict[Format, str] = {
     Format.JSONC: ".jsonc",
     Format.YAML: ".yaml",
     Format.TOML: ".toml",
+    Format.CSV: ".csv",
+    Format.TSV: ".tsv",
 }
 
 _SLOW_10MB: dict[str, set[tuple[str, str]]] = {

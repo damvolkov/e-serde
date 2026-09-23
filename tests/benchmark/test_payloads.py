@@ -15,6 +15,14 @@ from tests.benchmark.rivals import DUMP_RIVALS, LOAD_RIVALS
 
 pytestmark = pytest.mark.bench
 
+# Rivals that return raw strings (no inference) are timing baselines only:
+# their tree is by construction not comparable to the typed expectation.
+_NON_EXACT = {"stdlib-csv"}
+
+
+def _comparable(fmt: Format) -> dict:
+    return {name: decode for name, decode in LOAD_RIVALS[fmt].items() if name not in _NON_EXACT}
+
 
 @pytest.mark.parametrize("fmt", [f.value for f in Format])
 @pytest.mark.parametrize("size", ["1kb", "100kb"])
@@ -22,7 +30,7 @@ def test_payload(fmt: str, size: str) -> None:
     format_ = Format(fmt)
     expected = source_tree(format_, size)
     data = payload(format_, size)
-    for rival, decode in LOAD_RIVALS[format_].items():
+    for rival, decode in _comparable(format_).items():
         assert decode(data) == expected, rival
 
 
@@ -32,5 +40,5 @@ def test_payload_roundtrip(fmt: str, size: str) -> None:
     format_ = Format(fmt)
     expected = source_tree(format_, size)
     written = DUMP_RIVALS[format_]["e-serde"](expected)
-    for rival, decode in LOAD_RIVALS[format_].items():
+    for rival, decode in _comparable(format_).items():
         assert decode(written) == expected, rival

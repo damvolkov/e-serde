@@ -1,0 +1,8 @@
+sku,name,qty,price,active,notes,checksum
+VLN-001,Silmaril shard,3,9.9,true,,9007199254740993
+VLN-002,"Gauntlet, ""of"" Fëanor",-1,,false,"handle
+with
+care",12345678901234567890123
+LOT-014,Mithril ring,12,42.0,true,"says ""hello"", world",42
+LOT-015,Phial of Eärendil,0,7.25,false,,-99999999999999999999999
+NRD-001,colon: inside,7,,true,"ux, ördög, 日本語",1

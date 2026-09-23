@@ -89,5 +89,19 @@ STANDARDS: Mapping[Format, Standard] = MappingProxyType(
             version="0.21",
             features=_F({Feature.COMMENTS, Feature.BOM_TOLERANT, Feature.MERGE_DUP_SECTIONS}),
         ),
+        Format.CSV: Standard(
+            spec="RFC 4180: headered records as `list[dict]`, polars-style per-column type inference",
+            engine="csv",
+            crate="csv",
+            version="1.4",
+            features=_F({Feature.NULL, Feature.NONFINITE, Feature.BIGNUM, Feature.BOM_TOLERANT}),
+        ),
+        Format.TSV: Standard(
+            spec="RFC 4180 dialect: tab-delimited",
+            engine="csv",
+            crate="csv",
+            version="1.4",
+            features=_F({Feature.NULL, Feature.NONFINITE, Feature.BIGNUM, Feature.BOM_TOLERANT}),
+        ),
     }
 )

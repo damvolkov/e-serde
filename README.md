@@ -33,7 +33,7 @@ from pathlib import Path
 ```
 
 Six functions, `json` semantics, keyword-only options. `bytes`/`str` sources name the
-format; a `Path` autodetects from its suffix — `.json .jsonc .yaml .yml .toml .ini .cfg .conf`.
+format; a `Path` autodetects from its suffix — `.json .jsonc .yaml .yml .toml .ini .cfg .conf .csv .tsv`.
 
 | Function | Input | Output |
 | --- | --- | --- |
@@ -69,6 +69,7 @@ net = eserde.loads(src, type=Net, dec_hook=lambda t, v: t(v))  # custom fields i
 | `object_hook=` | rewrite every decoded mapping, innermost first (json semantics) |
 | `dec_hook=` | teach `type=` custom field types (requires `type=`) |
 | `registry=` | swap the default codec set |
+| `embed=` | inline `source:`-style references to plain `.md` files, root-confined |
 
 ### dumps — encode
 
@@ -93,6 +94,7 @@ Every input is normalized through the Jsonable encoder first (datetime → ISO,
 | `encoders=` | exact-type hooks, ahead of every built-in; results are re-walked |
 | `default=` | json/orjson-style last resort for unknown types; none → `EncoderError` |
 | `registry=` | swap the default codec set |
+| `embed=` | inline `source:`-style references to plain `.md` files, root-confined |
 
 ### load / dump — files
 
@@ -146,6 +148,8 @@ missing). The full guide lives at [damvolkov.github.io/e-serde](https://damvolko
 | YAML   | `.yaml` `.yml`        | YAML 1.2 core + merge keys | `saphyr` 0.0.12        | anchors, `<<`, bomb-guarded          |
 | TOML   | `.toml`               | TOML v1.1                  | `toml-rs` 1.1          | `inf`/`nan`, no null, i64 ints       |
 | INI    | `.ini` `.cfg` `.conf` | de-facto                   | `rust-ini` 0.21        | strings; merge on `strict=False`     |
+| CSV    | `.csv`                | RFC 4180                   | `csv` 1.4              | `list[dict]`, polars-style inference |
+| TSV    | `.tsv`                | RFC 4180 (tab)             | `csv` 1.4              | same codec, tab-delimited            |
 
 The contract lives in code — `eserde.STANDARDS` — and `test_standards.py` executes every
 claim against the live codecs and the lockfiles. Bumping an engine or changing a format
@@ -168,6 +172,7 @@ Median decode of a 100 KB config on CPython 3.14 (release build). Regenerate wit
 | TOML | 1.53 ms | rtoml 2.3–2.5 ms | 1.5× — tomlkit 42× |
 | JSONC | 0.79 ms | pyjson5 0.39 ms | the one format behind (×0.5) |
 | INI | 2.00 ms | configparser 22 ms | 11× |
+| CSV | 0.9–1.0 ms | polars 1.3–1.7 ms | ×1.3–1.8 — and polars never releases the GIL; stdlib csv is comparable and untyped |
 
 Because the Rust codecs release the GIL, `aloads` parallelizes decode: on 10 MB YAML/TOML the
 async fan-out is ~2× faster than serial sync (JSON stays flat — msgspec's C decoder holds the

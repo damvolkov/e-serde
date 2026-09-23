@@ -10,7 +10,7 @@ from eserde.infra.formats import Format, detect_format
 
 
 async def test_format_members_exhaustive() -> None:
-    assert {f.value for f in Format} == {"json", "jsonc", "yaml", "toml", "ini"}
+    assert {f.value for f in Format} == {"json", "jsonc", "yaml", "toml", "ini", "csv", "tsv"}
 
 
 _DETECTION_CASES: list[tuple[str, Format | None]] = [
@@ -21,6 +21,8 @@ _DETECTION_CASES: list[tuple[str, Format | None]] = [
     ("pyproject.toml", Format.TOML),
     ("setup.cfg", Format.INI),
     ("sys.conf", Format.INI),
+    ("data.csv", Format.CSV),
+    ("data.tsv", Format.TSV),
     ("noext", None),
     ("config.UNKNOWN", None),
 ]
@@ -29,7 +31,7 @@ _DETECTION_CASES: list[tuple[str, Format | None]] = [
 @pytest.mark.parametrize(
     ("filename", "expected"),
     _DETECTION_CASES,
-    ids=["json", "jsonc", "yaml", "yml", "toml", "cfg-as-ini", "conf-as-ini", "no-extension", "unknown-extension"],
+    ids=[name for name, _ in _DETECTION_CASES],
 )
 async def test_detect_format_resolves_by_extension(filename: str, expected: Format | None) -> None:
     assert detect_format(Path(filename)) == expected
