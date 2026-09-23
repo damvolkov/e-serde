@@ -19,7 +19,8 @@ Windows — no compiler, no Cargo required.
 
 ```python
 import eserde
-print(eserde.__version__)     # e.g. 0.1.0
+
+print(eserde.__version__)  # e.g. 0.2.0
 ```
 
 The `e-serde` console script lists the active codecs and the format each one uses:

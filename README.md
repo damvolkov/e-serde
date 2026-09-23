@@ -55,9 +55,10 @@ class Server(msgspec.Struct, frozen=True):
     host: str
     port: int
 
-srv = eserde.loads(src, format=Format.JSON, type=Server)              # Server(host='0.0.0.0', port=8080)
-srv = eserde.loads(ini, format=Format.INI, type=Server, strict=False) # "8080" → 8080
-net = eserde.loads(src, type=Net, dec_hook=lambda t, v: t(v))         # custom fields inside type=
+
+srv = eserde.loads(src, format=Format.JSON, type=Server)  # Server(host='0.0.0.0', port=8080)
+srv = eserde.loads(ini, format=Format.INI, type=Server, strict=False)  # "8080" → 8080
+net = eserde.loads(src, type=Net, dec_hook=lambda t, v: t(v))  # custom fields inside type=
 ```
 
 | kwarg | effect |
@@ -78,8 +79,9 @@ raw = eserde.dumps({"name": "demian", "n": 42}, format=Format.YAML)
 
 ```python
 from fractions import Fraction
+
 eserde.dumps({"f": Fraction(1, 2)}, format=Format.JSON, encoders={Fraction: str})  # b'{"f":"1/2"}'
-eserde.dumps({"f": Fraction(1, 2)}, format=Format.JSON, default=float)             # b'{"f":0.5}'
+eserde.dumps({"f": Fraction(1, 2)}, format=Format.JSON, default=float)  # b'{"f":0.5}'
 ```
 
 Every input is normalized through the Jsonable encoder first (datetime → ISO,
@@ -95,12 +97,12 @@ Every input is normalized through the Jsonable encoder first (datetime → ISO,
 ### load / dump — files
 
 ```python
-cfg = eserde.load(Path("config.toml"))              # format from the .toml suffix
+cfg = eserde.load(Path("config.toml"))  # format from the .toml suffix
 
 with open("app.json", "rb") as fh:
-    data = eserde.load(fh, format=Format.JSON)      # an open handle needs the format
+    data = eserde.load(fh, format=Format.JSON)  # an open handle needs the format
 
-eserde.dump(cfg, Path("out.jsonc"))                 # writes straight to disk → None
+eserde.dump(cfg, Path("out.jsonc"))  # writes straight to disk → None
 ```
 
 Same kwargs as `loads` / `dumps`.
@@ -125,8 +127,9 @@ e-serde cannot share faithfully delegate to the stdlib — slower, never a surpr
 
 ```python
 from eserde import compat
-compat.dumps({"a": 1}, ensure_ascii=False)       # '{"a":1}'   native compact utf-8
-compat.dumps({"a": 1})                           # byte-faithful to stdlib json
+
+compat.dumps({"a": 1}, ensure_ascii=False)  # '{"a":1}'   native compact utf-8
+compat.dumps({"a": 1})  # byte-faithful to stdlib json
 compat.loads('{"a": 1.5}', parse_float=Decimal)  # delegated to stdlib, never guessed
 ```
 
@@ -160,11 +163,11 @@ Median decode of a 100 KB config on CPython 3.14 (release build). Regenerate wit
 
 | Format | e-serde | nearest rival | margin |
 | --- | --- | --- | --- |
-| JSON | 0.17 ms | orjson 0.16 ms | ≈ tie — same decoder (msgspec) |
-| YAML | 2.24 ms | pyyaml C 11.9 ms | 5.3× — ruamel 66× |
-| TOML | 1.64 ms | rtoml 2.27 ms | 1.4× — tomlkit 42× |
-| JSONC | 0.66 ms | pyjson5 0.39 ms | the one format behind (×0.6) |
-| INI | 1.87 ms | configparser 19.3 ms | 10× |
+| JSON | 0.17 ms | orjson 0.17 ms | ≈ tie — same decoder (msgspec) |
+| YAML | 2.20 ms | pyyaml C 12–16 ms | ≈6× — ruamel 66× |
+| TOML | 1.53 ms | rtoml 2.3–2.5 ms | 1.5× — tomlkit 42× |
+| JSONC | 0.79 ms | pyjson5 0.39 ms | the one format behind (×0.5) |
+| INI | 2.00 ms | configparser 22 ms | 11× |
 
 Because the Rust codecs release the GIL, `aloads` parallelizes decode: on 10 MB YAML/TOML the
 async fan-out is ~2× faster than serial sync (JSON stays flat — msgspec's C decoder holds the
@@ -211,8 +214,10 @@ make bench               # rival benchmark matrix → assets/benchmarks/*.png
 
 Interop landed: `eserde` is a custom encoder for any framework that ducks-types `json`
 (`eserde.compat`), validates `pydantic`/`attrs` models through `type=`, and accepts
-per-call `default=`/`encoders=`/`dec_hook=` hooks. Next: concurrency stress at scale —
-thousands of simultaneous loads, GIL-detachment behavior and the thread-pool ceiling.
+per-call `default=`/`encoders=`/`dec_hook=` hooks. Shipped alongside a comparative
+concurrency stress harness (`make stress`). Next: broaden interop — msgspec/pydantic
+request-body and FastAPI response pipelines — and CI-gated regression against rival
+decoders under sustained load.
 
 ## License
 
