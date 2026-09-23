@@ -38,6 +38,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config push.followTagsToPush false
           git config http.https://github.com/.extraheader "AUTHORIZATION: basic $(printf '%s:%s' 'x-access-token' "$RELEASE_PAT" | base64 -w0)"
       - id: next
         env:
