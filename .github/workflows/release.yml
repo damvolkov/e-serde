@@ -23,6 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: write
     outputs:
       tag: ${{ steps.next.outputs.tag }}
     steps:
@@ -59,11 +60,13 @@ jobs:
             read -r M m p <<< "$(grep -m1 '^version = ' Cargo.toml | cut -d'"' -f2 | tr . ' ')"
           fi
           echo "tag=v$M.$m.$p" >> "$GITHUB_OUTPUT"
-      - name: Sync Cargo/uv and commit
+      - name: Sync Cargo/uv, open release PR, tag once merged
         if: inputs.tag == ''
         env:
           TAG: ${{ steps.next.outputs.tag }}
+          GH_TOKEN: ${{ github.token }}
         run: |
+          BRANCH="chore/release-${TAG#v}"
           sed -i "0,/^version = \"[0-9]*\.[0-9]*\.[0-9]*\"/s//version = \"${TAG#v}\"/" Cargo.toml
           cargo update --workspace
           uv lock
@@ -71,16 +74,27 @@ jobs:
           RANGE=${PREV:+v$PREV..HEAD}
           { printf '## [%s] — %s\n\n' "${TAG#v}" "$(date -u +%Y-%m-%d)"; git log --no-merges --pretty='- %s' $RANGE | grep -vE '^- chore\(release\)' | sed '/^-$/d'; printf '\n'; } > /tmp/entry.md
           awk 'NR==1{print;next} /^## \[/{if(!done){while((getline l<"/tmp/entry.md"))print l;done=1}print;next}{print}' CHANGELOG.md > /tmp/changelog.md && mv /tmp/changelog.md CHANGELOG.md
+          git switch -c "$BRANCH"
           git add Cargo.toml Cargo.lock uv.lock CHANGELOG.md
           git commit -m "chore(release): $TAG"
-          git push origin main
-          git tag "$TAG"
+          git push -f origin "$BRANCH"
+          gh pr create -B main -H "$BRANCH" --title "chore(release): $TAG" --body "Automated release bump. Squash-merges itself once CI is green." || true
+          gh pr merge --auto --squash "$BRANCH"
+          MERGED=""
+          for i in $(seq 1 120); do
+            MERGED=$(gh pr view "$BRANCH" --json mergedAt -q .mergedAt)
+            [ "$MERGED" != "null" ] && break
+            sleep 10
+          done
+          [ "$MERGED" != "null" ] || { echo "::error::release PR did not merge within 20 minutes" >&2; exit 1; }
+          git fetch origin main
+          git tag "$TAG" origin/main
           git push origin "$TAG"
       - name: GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.next.outputs.tag }}
-        run: gh release create "$TAG" --latest --verify-tag --notes-file <(sed -n "/## \[${TAG#v}\]/,/^## \[$/p" CHANGELOG.md | sed '$d') || gh release edit "$TAG" --latest=true
+        run: gh release create "$TAG" --latest --verify-tag --notes-file <(awk -v s="## [${TAG#v}]" 'index($0,s)==1{p=1} p && /^## \[/ && index($0,s)!=1{exit} p' CHANGELOG.md) || gh release edit "$TAG" --latest=true
 
   wheels:
     name: wheels (${{ matrix.os }}/${{ matrix.target }})

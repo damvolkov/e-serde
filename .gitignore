@@ -239,3 +239,6 @@ wheels/
 # local secrets
 gh_token
 gh_personal_token
+
+# local session notes
+logs.md
