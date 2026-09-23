@@ -172,7 +172,7 @@ Median decode of a 100 KB config on CPython 3.14 (release build). Regenerate wit
 | TOML | 1.53 ms | rtoml 2.3–2.5 ms | 1.5× — tomlkit 42× |
 | JSONC | 0.79 ms | pyjson5 0.39 ms | the one format behind (×0.5) |
 | INI | 2.00 ms | configparser 22 ms | 11× |
-| CSV | 0.92 ms | polars 1.3–1.7 ms | ×1.5–1.8 — and polars never releases the GIL; stdlib csv is comparable and untyped |
+| CSV | 0.9–1.0 ms | polars 1.3–1.7 ms | ×1.3–1.8 — and polars never releases the GIL; stdlib csv is comparable and untyped |
 
 Because the Rust codecs release the GIL, `aloads` parallelizes decode: on 10 MB YAML/TOML the
 async fan-out is ~2× faster than serial sync (JSON stays flat — msgspec's C decoder holds the
