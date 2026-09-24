@@ -17,6 +17,7 @@
 | merge keys (`<<`) | — | outside this format's contract |
 | leading UTF-8 BOM | — | outside this format's contract |
 | repeated `[section]` blocks | — | outside this format's contract |
+| `iloads`/`idumps` record streaming | yes | one record at a time, never the whole document |
 
 ## Example
 

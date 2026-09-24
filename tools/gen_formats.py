@@ -51,6 +51,7 @@ DESC = {
     Feature.BIGNUM: ("integers beyond 64-bit", "exact round-trip"),
     Feature.COMMENTS: ("comments", "accepted on load"),
     Feature.TRAILING_COMMAS: ("trailing array commas", "accepted"),
+    Feature.STREAM: ("`iloads`/`idumps` record streaming", "one record at a time, never the whole document"),
     Feature.ANCHORS: ("anchors & aliases (`&x` / `*x`)", "resolved, budget-guarded"),
     Feature.MERGE_KEYS: ("merge keys (`<<`)", "resolved; explicit keys win"),
     Feature.BOM_TOLERANT: ("leading UTF-8 BOM", "stripped"),

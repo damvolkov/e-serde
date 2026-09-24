@@ -6,6 +6,7 @@ keeping it here enforces the layering: `infra` <- `backends` <- `logic`.
 
 from __future__ import annotations
 
+import re
 from enum import StrEnum, auto
 from typing import TYPE_CHECKING
 
@@ -29,6 +30,8 @@ class Format(StrEnum):
 
 _EXTENSION_TO_FORMAT: dict[str, Format] = {
     ".json": Format.JSON,
+    ".ndjson": Format.JSON,
+    ".jsonl": Format.JSON,
     ".jsonc": Format.JSONC,
     ".yaml": Format.YAML,
     ".yml": Format.YAML,
@@ -43,6 +46,7 @@ _EXTENSION_TO_FORMAT: dict[str, Format] = {
 _UTF8_BOM = b"\xef\xbb\xbf"
 _WHITESPACE = b" \t\r\n\v\f"
 _SNIFF_HEAD = 4096  # comment probes look at the head only: jsonc documents announce themselves early
+_JSON_TOKEN = re.compile(rb'"(?:[^"\\]|\\.)*"|//[^\n]*|/\*.*?\*/', re.DOTALL)  # string | line comment | block comment
 
 
 def detect_format(path: Path) -> Format | None:
@@ -70,29 +74,21 @@ def sniff_format(data: bytes) -> Format | None:
     format. New formats join by widening this table, never the facade.
     """
     body = data.removeprefix(_UTF8_BOM).lstrip(_WHITESPACE)
-    if body[:2] in (b"//", b"/*"):
-        return Format.JSONC
-    after_brace = body[1:].lstrip(_WHITESPACE) if body[:1] == b"{" else b""
-    if after_brace[:1] == b"/":
-        return Format.JSONC
-    if after_brace[:1] not in (b'"', b"}"):
-        return None
-    return Format.JSONC if _has_comment(body[:_SNIFF_HEAD]) else Format.JSON
+    match body[:1]:
+        case b"/" if body[:2] in (b"//", b"/*"):
+            return Format.JSONC
+        case b"{":
+            match body[1:].lstrip(_WHITESPACE)[:1]:
+                case b"/":
+                    return Format.JSONC
+                case b'"' | b"}":
+                    return Format.JSONC if _has_comment(body[:_SNIFF_HEAD]) else Format.JSON
+                case _:
+                    return None
+        case _:
+            return None
 
 
 def _has_comment(head: bytes) -> bool:
-    """Line scan honoring strings and escapes: `//` inside a value is not a comment."""
-    for line in head.splitlines():
-        in_string = False
-        escaped = False
-        for index in range(len(line)):
-            byte = line[index : index + 1]
-            if escaped:
-                escaped = False
-            elif byte == b"\\":
-                escaped = True
-            elif byte == b'"':
-                in_string = not in_string
-            elif byte == b"/" and not in_string and line[index : index + 2] == b"//":
-                return True
-    return False
+    """Line scan honoring strings and escapes: a `//` inside a value is not a comment."""
+    return any(token.group(0)[:1] == b"/" for token in _JSON_TOKEN.finditer(head))

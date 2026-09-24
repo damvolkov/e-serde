@@ -41,15 +41,20 @@ class _Hooks:
 
 @singledispatch
 def _leaf(obj: Any) -> Any:
-    """Duck-typed models for objects the walk cannot consume: pydantic, Struct, dataclass."""
-    if (model_dump := getattr(obj, "model_dump", None)) is not None and callable(model_dump):
-        return model_dump(mode="json")
-    if isinstance(obj, msgspec.Struct):
-        return msgspec.to_builtins(obj)
-    if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
-        return dataclasses.asdict(obj)
-    msg = f"cannot encode object of type {type(obj).__name__!r}"
-    raise EncoderError(msg)
+    """Duck-typed models the walk cannot consume: pydantic (optional peer), dataclass."""
+    match obj:
+        case _ if callable(model_dump := getattr(obj, "model_dump", None)):
+            return model_dump(mode="json")
+        case _ if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
+            return dataclasses.asdict(obj)
+        case _:
+            msg = f"cannot encode object of type {type(obj).__name__!r}"
+            raise EncoderError(msg)
+
+
+@_leaf.register(msgspec.Struct)
+def _leaf_struct(obj: msgspec.Struct) -> Any:
+    return msgspec.to_builtins(obj)
 
 
 @_leaf.register(bytes)
@@ -95,8 +100,6 @@ def _walk(obj: Any, hooks: _Hooks) -> Any:
     match obj:
         case Mapping():
             return {_key(key, hooks): _walk(value, hooks) for key, value in obj.items()}
-        case bytes() | bytearray():
-            return _walk(_leaf(obj), hooks)
         case list() | tuple() | set() | frozenset() | range():
             return [_walk(item, hooks) for item in obj]
         case _:

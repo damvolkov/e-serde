@@ -19,6 +19,8 @@ def loads(
     registry: CodecRegistry = default_registry,
     object_hook: Callable[[dict[str, Any]], Any] | None = None,
     dec_hook: Callable[[Any, Any], Any] | None = None,
+    embed: Sequence[str] | bool = False,
+    root: str | Path | None = None,
 ) -> Any: ...
 
 def dumps(
@@ -33,11 +35,19 @@ def dumps(
 def load(target: str | Path | BinaryIO, *, ...) -> Any: ...        # like loads, file input
 def dump(obj: Any, target: str | Path | BinaryIO, *, ...) -> None: ...   # like dumps, file output
 
+# streaming — one record at a time: CSV/TSV rows, NDJSON lines
+def iloads(source: bytes | str | Path, *, format: Format | str | None = None,
+           registry: CodecRegistry = default_registry) -> Iterator[Any]: ...
+def idumps(obj: Iterable[Any], *, format: Format | str = Format.JSON,
+           registry: CodecRegistry = default_registry) -> Iterator[bytes]: ...
+
 # async twins — identical signatures, offloaded I/O and parsing
 def aloads(...) -> Awaitable[Any]: ...
 def adumps(...) -> Awaitable[bytes]: ...
 def aload(...) -> Awaitable[Any]: ...
 def adump(...) -> Awaitable[None]: ...
+def ailoads(...) -> AsyncIterator[Any]: ...     # like iloads
+def aidumps(...) -> AsyncIterator[bytes]: ...   # like idumps; obj may be async
 ```
 
 ## Options
@@ -49,6 +59,7 @@ def adump(...) -> Awaitable[None]: ...
 | `strict` | decode | `False` opts into msgspec coercion — the escape hatch INI needs |
 | `object_hook` | decode | rewrites each decoded mapping bottom-up, json semantics |
 | `dec_hook` | decode | `(type, value) -> Any` custom field types inside `type=`; without `type=` raises `FormatError` |
+| `embed` | decode | `True` inlines `source:`-style `.md` references; a sequence names the keys; `root=` anchors relative paths |
 | `default` | encode | last resort for unknown types, json/orjson semantics |
 | `encoders` | encode | `Mapping[type, Callable]` intercepted by exact type ahead of every built-in; results are re-walked |
 | `registry` | all | a `CodecRegistry` mapping each `Format` to its codec; `default_registry` ships the five built-ins — pass a custom one to swap engines without touching call sites |

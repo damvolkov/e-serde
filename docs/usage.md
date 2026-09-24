@@ -10,6 +10,8 @@ in-memory; `load`/`dump` take files; every function has an async twin prefixed w
 | `load` | `Path \| BinaryIO` | like `loads` |
 | `dump` | object → file | `None` |
 | `aloads` · `adumps` · `aload` · `adump` | same | awaitables of the same |
+| `iloads` · `idumps` | streamed records | `Iterator` of objects / `bytes` chunks |
+| `ailoads` · `aidumps` | same | `AsyncIterator` of the same |
 
 ```python
 import eserde
@@ -119,6 +121,48 @@ asyncio.run(main())
     The Rust codecs release the GIL, so concurrent `aloads` parallelize decode across
     cores — on 10 MB YAML/TOML the fan-out is ~2× faster than serial sync. JSON runs on
     msgspec's C decoder, which holds the GIL, so it stays flat. See [Benchmarks](benchmarks.md).
+
+## Streaming — iloads · idumps · ailoads · aidumps
+
+Records one at a time — the document never materializes whole. Streaming is a **declared
+capability**: JSON and JSONC speak NDJSON (one line, one document), CSV and TSV stream rows;
+YAML, TOML and INI raise `FormatError` with the streamable list instead of pretending.
+
+```python
+rows = eserde.iloads(b'{"i": 1}\n{"i": 2}\n', format="json")   # iterator, lazy
+for row in eserde.iloads(Path("corpus.csv")):                     # the file stays on disk
+    ...
+
+first = next(eserde.iloads(Path("huge.csv")))                     # reads one record, period
+```
+
+```python
+import asyncio
+
+async def main():
+    async for row in eserde.ailoads(Path("corpus.csv")):          # batches drained off the loop
+        ...
+    async def source():
+        for record in rows:
+            yield record
+    async for chunk in eserde.aidumps(source(), format="json"):   # async source, chunk sink
+        outfile.write(chunk)
+
+asyncio.run(main())
+```
+
+Async input works too — `aidumps` accepts a sync **or** async iterable and yields encoded
+chunks; concatenating them is the document, header emitted exactly once for CSV/TSV:
+
+```python
+chunks = eserde.idumps(({"n": i} for i in itertools.count()), format="csv")
+head = next(chunks)                                               # b"n\n"
+```
+
+!!! warning "Streaming typing"
+    A CSV stream has no whole-column view: cells are typed **per value**, so a column mixing
+    kinds may vary row to row. `loads` keeps the global polars-style inference — reach for it
+    when the file fits in memory (it does for configurations; that is the point of this library).
 
 ## CSV and TSV — tables, typed
 
