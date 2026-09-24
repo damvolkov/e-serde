@@ -44,6 +44,8 @@ content sniffs itself, and everything else must declare its format.
 | `load` | `str \| Path \| BinaryIO` | like `loads` |
 | `dump` | object → file | `None` |
 | `aloads` · `adumps` · `aload` · `adump` | same | awaitables of the same |
+| `iloads` · `idumps` | records, streamed | `Iterator` of objects / `bytes` chunks |
+| `ailoads` · `aidumps` | same | `AsyncIterator` of the same |
 
 ### loads — decode
 
@@ -220,11 +222,17 @@ make bench               # rival benchmark matrix → assets/benchmarks/*.png
 ## Roadmap
 
 Interop landed: `eserde` is a custom encoder for any framework that ducks-types `json`
-(`eserde.compat`), validates `pydantic`/`attrs` models through `type=`, and accepts
-per-call `default=`/`encoders=`/`dec_hook=` hooks. Shipped alongside a comparative
-concurrency stress harness (`make stress`). Next: broaden interop — msgspec/pydantic
-request-body and FastAPI response pipelines — and CI-gated regression against rival
-decoders under sustained load.
+(`eserde.compat`), validates `pydantic`/`attrs` models through `type=`, accepts
+per-call `default=`/`encoders=`/`dec_hook=` hooks, inlines Markdown bodies (`embed=`),
+and streams records one at a time (`iloads`/`idumps` and async twins). Shipped alongside
+a comparative concurrency stress harness (`make stress`).
+
+- **Pending consideration**: YAML multi-document streaming (`---` boundaries, reusing the
+  event-stream scanner) — viable, but only pays for stream-shaped YAML corpora.
+- **Rejected by design**: TOML and INI streaming — their semantics (scattered tables,
+  duplicate-section merge) require the global view; the contract says so loudly.
+- **Next**: broaden interop — msgspec/pydantic request-body and FastAPI response
+  pipelines — and CI-gated regression against rival decoders under sustained load.
 
 ## License
 
