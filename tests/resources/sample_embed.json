@@ -13,7 +13,7 @@
     "flags": ["beta-routing", "serde-v2"]
   },
   "content": {
-    "source": "./content/sample_key_path_content.md"
+    "source": "./content/sample_embed.md"
   },
   "types": {
     "string": "plain",
