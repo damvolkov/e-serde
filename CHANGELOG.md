@@ -8,6 +8,11 @@ This file is maintained automatically: the release workflow appends the notes of
 every tagged version, and a CI test fails if the head of this file ever disagrees
 with `Cargo.toml`.
 
+## [0.4.0] — 2026-09-24
+
+- feat: str-path targets, format coercion and strict content sniffing (#25)
+- fix(release): wait on the PR number, refuse to tag on empty merge state (#24)
+
 ## [0.3.0] — 2026-09-23
 
 - feat: content embedding and CSV/TSV codecs (#22)
