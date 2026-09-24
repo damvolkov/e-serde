@@ -117,14 +117,15 @@ def _plan_stream(source: Source, format: FormatLike | None, registry: CodecRegis
 
 
 def _stream_codec(fmt: Format, registry: CodecRegistry) -> StreamingCodec:
-    codec = registry.get(fmt)
-    if not isinstance(codec, StreamingCodec):
-        streamable = " · ".join(
-            sorted(f.value for f in registry.formats() if isinstance(registry.get(f), StreamingCodec))
-        )
-        msg = f"{fmt.value} does not support streaming — iloads/idumps speak {streamable}; materialize whole documents with loads/dumps"
-        raise FormatError(msg)
-    return codec
+    match registry.get(fmt):
+        case StreamingCodec() as codec:
+            return codec
+        case _:
+            streamable = " · ".join(
+                sorted(f.value for f in registry.formats() if isinstance(registry.get(f), StreamingCodec))
+            )
+            msg = f"{fmt.value} does not support streaming — iloads/idumps speak {streamable}; materialize whole documents with loads/dumps"
+            raise FormatError(msg)
 
 
 def _read_batch(iterator: Iterator[Any]) -> list[Any]:
@@ -143,30 +144,39 @@ async def _drain_reads(plan: _StreamPlan) -> AsyncIterator[Any]:
 
 
 async def _drain_writes(codec: StreamingCodec, obj: Iterable[Any] | AsyncIterable[Any]) -> AsyncIterator[bytes]:
-    if isinstance(obj, AsyncIterable):
-        async for record in obj:
-            for chunk in await to_thread(_encode_batch, codec, [record]):
-                yield chunk
-        return
-    iterator = codec.iterdumps(obj)
-    while batch := await to_thread(_read_batch, iterator):
-        for chunk in batch:
-            yield chunk
+    match obj:
+        case AsyncIterable():
+            async for record in obj:
+                for chunk in await to_thread(_encode_batch, codec, [record]):
+                    yield chunk
+        case _:
+            iterator = codec.iterdumps(obj)
+            while batch := await to_thread(_read_batch, iterator):
+                for chunk in batch:
+                    yield chunk
 
 
 def _embed_keys(embed: Embed) -> tuple[str, ...]:
-    if isinstance(embed, bool):
-        return DEFAULT_EMBED_KEYS if embed else ()
-    return tuple(embed)
+    """`True` → default keys, `False` → none, a sequence → the declared keys."""
+    match embed:
+        case True:
+            return DEFAULT_EMBED_KEYS
+        case False:
+            return ()
+        case _:
+            return tuple(embed)
 
 
 def _embed_root(root: str | Path | None, base: Path | None) -> Path:
-    if root is not None:
-        return Path(root)
-    if base is None:
-        msg = "embed requires root= when the source carries no path to anchor relative references"
-        raise FormatError(msg)
-    return base
+    """`root=` wins; otherwise anchor on the source's directory; otherwise refuse loudly."""
+    match root, base:
+        case str() | Path() as anchor, _:
+            return Path(anchor)
+        case None, Path():
+            return base
+        case _:
+            msg = "embed requires root= when the source carries no path to anchor relative references"
+            raise FormatError(msg)
 
 
 def loads(
@@ -190,7 +200,7 @@ def loads(
     `embed` inlines references: `True` resolves `source:` keys against the document's
     directory (or `root=`), a sequence names the keys to treat as `.md` references.
     """
-    fmt, data, base = _resolve(source, format, "loads")
+    fmt, data, base = _resolve(source, format)
     keys = _embed_keys(embed)
     tree = _decode_sniffed(registry, fmt, data, sniffed=format is None and not isinstance(source, Path))
     if keys:
@@ -244,12 +254,12 @@ def dump(
     encoders: Encoders | None = None,
 ) -> None:
     """Encode `obj` straight into a file. Format inferred from the path; handles require it."""
-    target = Path(target) if isinstance(target, str) else target
     data = dumps(obj, format=_target_format(target, format), registry=registry, default=default, encoders=encoders)
-    if isinstance(target, Path):
-        target.write_bytes(data)
-    else:
-        target.write(data)
+    match target:
+        case str() | Path() as name:
+            Path(name).write_bytes(data)
+        case _:
+            target.write(data)
 
 
 async def aloads(
@@ -265,12 +275,15 @@ async def aloads(
     root: str | Path | None = None,
 ) -> Any:
     """Async variant of `loads`. Path reads, embedding and native parsing off the event loop."""
-    if isinstance(source, Path):
-        data, fmt, base = await aread_bytes(source), _path_format(source, format), source.parent
-    else:
-        fmt, data, base = _resolve(source, format, "loads")
+    match source:
+        case Path():
+            fmt, data, base = _path_format(source, format), await aread_bytes(source), source.parent
+        case _:
+            fmt, data, base = _resolve(source, format)
     keys = _embed_keys(embed)
-    tree = await to_thread(_decode_sniffed, registry, fmt, data, sniffed=format is None)
+    tree = await to_thread(
+        _decode_sniffed, registry, fmt, data, sniffed=format is None and not isinstance(source, Path)
+    )
     if keys:
         tree = await to_thread(embed_tree, tree, keys, _embed_root(root, base))
     return await to_thread(_finalize, tree, type=type, strict=strict, object_hook=object_hook, dec_hook=dec_hook)
@@ -302,12 +315,12 @@ async def aload(
     root: str | Path | None = None,
 ) -> Any:
     """Async variant of `load`."""
-    target = Path(target) if isinstance(target, str) else target
-    fmt, data, base = (
-        (_path_format(target, format), await aread_bytes(target), target.parent)
-        if isinstance(target, Path)
-        else (_require_format(format, "file handle"), await aread_handle(target), None)
-    )
+    match target:
+        case str() | Path() as name:
+            path = Path(name)
+            fmt, data, base = _path_format(path, format), await aread_bytes(path), path.parent
+        case _:
+            fmt, data, base = _require_format(format, "file handle"), await aread_handle(target), None
     keys = _embed_keys(embed)
     tree = await to_thread(registry.get(fmt).loads, data)
     if keys:
@@ -325,17 +338,17 @@ async def adump(
     encoders: Encoders | None = None,
 ) -> None:
     """Async variant of `dump`."""
-    target = Path(target) if isinstance(target, str) else target
     data = await adumps(
         obj, format=_target_format(target, format), registry=registry, default=default, encoders=encoders
     )
-    if isinstance(target, Path):
-        await awrite_bytes(target, data)
-    else:
-        await to_thread(target.write, data)
+    match target:
+        case str() | Path() as name:
+            await awrite_bytes(Path(name), data)
+        case _:
+            await to_thread(target.write, data)
 
 
-def _resolve(source: Source, format: FormatLike | None, _op: str) -> tuple[Format, bytes, Path | None]:
+def _resolve(source: Source, format: FormatLike | None) -> tuple[Format, bytes, Path | None]:
     match source:
         case Path():
             return _path_format(source, format), source.read_bytes(), source.parent
@@ -370,11 +383,12 @@ def _decode_sniffed(registry: CodecRegistry, fmt: Format, data: bytes, *, sniffe
 
 
 def _resolve_file(target: Target, format: FormatLike | None) -> tuple[Format, bytes, Path | None]:
-    if isinstance(target, str):
-        target = Path(target)
-    if isinstance(target, Path):
-        return _path_format(target, format), target.read_bytes(), target.parent
-    return _require_format(format, "file handle"), target.read(), None
+    match target:
+        case str() | Path() as name:
+            path = Path(name)
+            return _path_format(path, format), path.read_bytes(), path.parent
+        case _:
+            return _require_format(format, "file handle"), target.read(), None
 
 
 def _finalize(
@@ -414,9 +428,8 @@ def _apply_object_hook(node: Any, hook: ObjectHook) -> Any:
 
 
 def _uses_pydantic(type_: Any) -> bool:
-    if hasattr(type_, "__pydantic_validator__"):
-        return True
-    return any(_uses_pydantic(arg) for arg in get_args(type_))
+    """Whether `type_` or any generic arg is a pydantic model; otherwise msgspec converts."""
+    return hasattr(type_, "__pydantic_validator__") or any(_uses_pydantic(arg) for arg in get_args(type_))
 
 
 def _pydantic_validate(obj: Any, type_: Any, *, strict: bool) -> Any:
@@ -446,9 +459,11 @@ def _path_format(path: Path, format: FormatLike | None) -> Format:
 
 
 def _target_format(target: Target, format: FormatLike | None) -> Format:
-    if isinstance(target, (Path, str)):
-        return _path_format(Path(target), format)
-    return _require_format(format, "file handle")
+    match target:
+        case str() | Path() as name:
+            return _path_format(Path(name), format)
+        case _:
+            return _require_format(format, "file handle")
 
 
 def _require_format(format: FormatLike | None, source_kind: str) -> Format:
