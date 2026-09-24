@@ -91,6 +91,8 @@ jobs:
           [ -n "$MERGED" ] && [ "$MERGED" != "null" ] || { echo "::error::release PR #$PR did not merge within 20 minutes" >&2; exit 1; }
           SHA=$(gh pr view "$PR" --json mergeCommit -q .mergeCommit.oid)
           [ -n "$SHA" ] && [ "$SHA" != "null" ] || { echo "::error::PR #$PR merged without a merge commit" >&2; exit 1; }
+          git fetch -q origin main
+          [ "$(git rev-parse origin/main)" = "$SHA" ] || { echo "::error::main is not at PR #$PR's merge commit — refusing to tag" >&2; exit 1; }
           git tag "$TAG" "$SHA"
           git push origin "$TAG"
       - name: GitHub release
