@@ -8,6 +8,13 @@ This file is maintained automatically: the release workflow appends the notes of
 every tagged version, and a CI test fails if the head of this file ever disagrees
 with `Cargo.toml`.
 
+## [0.5.0] — 2026-09-24
+
+- style(logic): match-case dispatch in stream/embed resolvers per house law
+- feat(streams): iloads/idumps family — streaming records, sync and async (#29)
+- test(embed): explicit tests against the fixed sample_embed fixture (#28)
+- fix(release): fetch main and verify before tagging the merge commit (#27)
+
 ## [0.4.0] — 2026-09-24
 
 - feat: str-path targets, format coercion and strict content sniffing (#25)
