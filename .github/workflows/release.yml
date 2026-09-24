@@ -81,6 +81,9 @@ jobs:
           PR=$(gh pr create -B main -H "$BRANCH" --title "chore(release): $TAG" --body "Automated release bump. Squash-merges itself once CI is green." 2>/dev/null | tail -n1 | awk -F/ '{print $NF}')
           PR=${PR:-$(gh pr view "$BRANCH" --json number -q .number)}
           [ -n "$PR" ] || { echo "::error::could not open or find the release PR" >&2; exit 1; }
+          ### GitHub suppresses CI on PRs opened by GITHUB_TOKEN: re-push as the PAT's human actor (one disposable commit, absorbed by the squash) to fire the synchronize event.
+          git commit --allow-empty -m "chore(release): trigger CI on the release PR"
+          git push origin "$BRANCH"
           gh pr merge --auto --squash "$PR"
           MERGED=""
           for i in $(seq 1 120); do
