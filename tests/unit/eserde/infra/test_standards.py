@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-from eserde import dumps, loads
+from eserde import dumps, iloads, loads
 from eserde.infra.formats import Format
 from eserde.infra.standards import STANDARDS, Feature
 
@@ -33,6 +33,7 @@ DESC_LABEL = {
     Feature.MERGE_KEYS: "merge keys (`<<`)",
     Feature.BOM_TOLERANT: "leading UTF-8 BOM",
     Feature.MERGE_DUP_SECTIONS: "repeated `[section]` blocks",
+    Feature.STREAM: "`iloads`/`idumps` record streaming",
 }
 
 type Probe = Callable[[Format], bool]
@@ -125,6 +126,21 @@ def _merge_dup_sections(fmt: Format) -> bool:
     return _safe(lambda: loads(b"[a]\nk = 1\n[a]\nj = 2\n", format=fmt) == {"a": {"k": "1", "j": "2"}})
 
 
+_STREAM_PAYLOADS = {
+    Format.JSON: b'{"a": 1}\n{"a": 2}\n',
+    Format.JSONC: b'{"a": 1} // one\n{"a": 2} // two\n',
+    Format.YAML: b"a: &x 1\nb: *x\n",
+    Format.TOML: b"[s]\nk = 1\n",
+    Format.INI: b"[s]\nk = 1\n",
+    Format.CSV: b"a,b\n1,x\n2,y\n",
+    Format.TSV: b"a\tb\n1\tx\n2\ty\n",
+}
+
+
+def _stream(fmt: Format) -> bool:
+    return _safe(lambda: len(list(iloads(_STREAM_PAYLOADS[fmt], format=fmt))) == 2)
+
+
 _PROBES: dict[Feature, Probe] = {
     Feature.NULL: _null,
     Feature.NONFINITE: _nonfinite,
@@ -135,6 +151,7 @@ _PROBES: dict[Feature, Probe] = {
     Feature.MERGE_KEYS: _merge_keys,
     Feature.BOM_TOLERANT: _bom,
     Feature.MERGE_DUP_SECTIONS: _merge_dup_sections,
+    Feature.STREAM: _stream,
 }
 
 _CELLS = [(fmt, feature) for fmt in Format for feature in _PROBES]

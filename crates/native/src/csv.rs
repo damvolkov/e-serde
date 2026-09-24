@@ -146,6 +146,184 @@ fn build<'py>(
     Ok(rows.into_any())
 }
 
+fn per_cell<'py>(py: Python<'py>, text: &str) -> PyResult<Bound<'py, PyAny>> {
+    if text.is_empty() {
+        return Ok(py.None().into_bound(py));
+    }
+    cell(py, text, classify(text))
+}
+
+fn row_dict<'py>(
+    py: Python<'py>,
+    header: &[String],
+    record: &csv::StringRecord,
+) -> PyResult<Bound<'py, PyAny>> {
+    let row = PyDict::new(py);
+    for (index, name) in header.iter().enumerate() {
+        row.set_item(name, per_cell(py, &record[index])?)?;
+    }
+    Ok(row.into_any())
+}
+
+fn check_header(header: &[String]) -> Result<(), String> {
+    if header.is_empty() {
+        return Err("csv document carries no header row".to_string());
+    }
+    if let Some(duplicate) =
+        (1..header.len()).find(|index| header[..*index].contains(&header[*index]))
+    {
+        return Err(format!("duplicate column name {:?}", header[duplicate]));
+    }
+    Ok(())
+}
+
+type Rows = Box<dyn Iterator<Item = Result<csv::StringRecord, csv::Error>> + Send + Sync>;
+
+/// Row-at-a-time CSV iterator. The document lives in the reader (bytes or file), only
+/// one record is materialized per `next`, and each cell is typed on its own — while
+/// streaming there is no whole-column view, so mixed-kind columns may vary per row
+/// (`loads` keeps the global polars-style inference).
+#[pyclass]
+struct CsvStream {
+    header: Vec<String>,
+    rows: Rows,
+    seen: usize,
+}
+
+fn next_row<'py>(slf: &mut CsvStream, py: Python<'py>) -> PyResult<Option<Bound<'py, PyAny>>> {
+    let Some(result) = slf.rows.next() else {
+        return Ok(None);
+    };
+    slf.seen += 1;
+    let record =
+        result.map_err(|exc| PyValueError::new_err(format!("row {}: {exc}", slf.seen + 1)))?;
+    if record.len() != slf.header.len() {
+        return Err(PyValueError::new_err(format!(
+            "row {} has {} fields, the header declares {}",
+            slf.seen + 1,
+            record.len(),
+            slf.header.len()
+        )));
+    }
+    row_dict(py, &slf.header, &record).map(Some)
+}
+
+#[pymethods]
+impl CsvStream {
+    fn __iter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
+        slf
+    }
+
+    fn __next__(mut slf: PyRefMut<'_, Self>) -> PyResult<Option<Bound<'_, PyAny>>> {
+        let py = slf.py();
+        next_row(&mut slf, py)
+    }
+
+    #[getter]
+    fn header<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
+        PyList::new(
+            py,
+            self.header
+                .iter()
+                .map(|name| PyString::new(py, name).into_any()),
+        )
+    }
+}
+
+fn stream_reader<R>(reader: csv::Reader<R>) -> Result<CsvStream, String>
+where
+    R: std::io::Read + Send + Sync + 'static,
+{
+    let mut reader = reader;
+    let header: Vec<String> = reader
+        .headers()
+        .map_err(|exc| exc.to_string())?
+        .iter()
+        .map(str::to_string)
+        .collect();
+    check_header(&header)?;
+    Ok(CsvStream {
+        header,
+        rows: Box::new(reader.into_records()),
+        seen: 0,
+    })
+}
+
+fn build_reader(bytes: Vec<u8>, delimiter: u8) -> csv::Reader<std::io::Cursor<Vec<u8>>> {
+    let bytes = if bytes.starts_with(b"\xef\xbb\xbf") {
+        bytes[3..].to_vec()
+    } else {
+        bytes
+    };
+    csv::ReaderBuilder::new()
+        .delimiter(delimiter)
+        .flexible(true)
+        .trim(csv::Trim::None)
+        .from_reader(std::io::Cursor::new(bytes))
+}
+
+fn stream_from(bytes: Vec<u8>, delimiter: u8) -> Result<CsvStream, String> {
+    stream_reader(build_reader(bytes, delimiter))
+}
+
+fn stream_from_path(path: &str, delimiter: u8) -> Result<CsvStream, String> {
+    let file = std::fs::File::open(path).map_err(|exc| format!("cannot open {path}: {exc}"))?;
+    let reader = csv::ReaderBuilder::new()
+        .delimiter(delimiter)
+        .flexible(true)
+        .trim(csv::Trim::None)
+        .from_reader(std::io::BufReader::new(file));
+    stream_reader(reader)
+}
+
+fn header_line(header: &[String], delimiter: u8) -> String {
+    let mut out = Vec::new();
+    for (index, name) in header.iter().enumerate() {
+        if index > 0 {
+            out.push(delimiter);
+        }
+        write_field(&mut out, name, delimiter);
+    }
+    out.push(b'\n');
+    String::from_utf8(out).expect("header cells are valid utf-8")
+}
+
+fn row_line(
+    header: &[String],
+    row: &Bound<'_, PyAny>,
+    delimiter: u8,
+    number: usize,
+) -> PyResult<String> {
+    let dict = row
+        .cast::<PyDict>()
+        .map_err(|_| PyValueError::new_err(format!("record {number} is not a mapping")))?;
+    if dict.len() != header.len() {
+        return Err(PyValueError::new_err(format!(
+            "record {number} has {} keys, the header declares {}",
+            dict.len(),
+            header.len()
+        )));
+    }
+    let mut out = Vec::new();
+    for (index, name) in header.iter().enumerate() {
+        if index > 0 {
+            out.push(delimiter);
+        }
+        let value = match dict.get_item(name) {
+            Ok(Some(value)) => value,
+            Ok(None) => {
+                return Err(PyValueError::new_err(format!(
+                    "record {number} is missing column {name:?}"
+                )));
+            }
+            Err(exc) => return Err(exc),
+        };
+        write_cell(&mut out, &value, delimiter, number, name)?;
+    }
+    out.push(b'\n');
+    String::from_utf8(out).map_err(|exc| PyValueError::new_err(exc.to_string()))
+}
+
 fn write_field(out: &mut Vec<u8>, text: &str, delimiter: u8) {
     let needs_quotes = text
         .as_bytes()
@@ -273,6 +451,26 @@ fn dumps(py: Python<'_>, obj: Bound<'_, PyAny>) -> PyResult<String> {
 }
 
 #[pyfunction]
+fn stream(data: Vec<u8>) -> PyResult<CsvStream> {
+    stream_from(data, b',').map_err(PyValueError::new_err)
+}
+
+#[pyfunction]
+fn stream_at(path: &str) -> PyResult<CsvStream> {
+    stream_from_path(path, b',').map_err(PyValueError::new_err)
+}
+
+#[pyfunction]
+fn dumps_header(header: Vec<String>) -> String {
+    header_line(&header, b',')
+}
+
+#[pyfunction]
+fn dumps_row(header: Vec<String>, number: usize, row: Bound<'_, PyAny>) -> PyResult<String> {
+    row_line(&header, &row, b',', number)
+}
+
+#[pyfunction]
 #[pyo3(name = "loads")]
 fn loads_tsv<'py>(py: Python<'py>, data: &str) -> PyResult<Bound<'py, PyAny>> {
     loads_with(py, data, b'\t')
@@ -284,14 +482,48 @@ fn dumps_tsv(py: Python<'_>, obj: Bound<'_, PyAny>) -> PyResult<String> {
     encode(py, obj, b'\t')
 }
 
+#[pyfunction]
+#[pyo3(name = "stream")]
+fn stream_tsv(data: Vec<u8>) -> PyResult<CsvStream> {
+    stream_from(data, b'\t').map_err(PyValueError::new_err)
+}
+
+#[pyfunction]
+#[pyo3(name = "stream_at")]
+fn stream_at_tsv(path: &str) -> PyResult<CsvStream> {
+    stream_from_path(path, b'\t').map_err(PyValueError::new_err)
+}
+
+#[pyfunction]
+#[pyo3(name = "dumps_header")]
+fn dumps_header_tsv(header: Vec<String>) -> String {
+    header_line(&header, b'\t')
+}
+
+#[pyfunction]
+#[pyo3(name = "dumps_row")]
+fn dumps_row_tsv(header: Vec<String>, number: usize, row: Bound<'_, PyAny>) -> PyResult<String> {
+    row_line(&header, &row, b'\t', number)
+}
+
 pub fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_class::<CsvStream>()?;
     m.add_function(wrap_pyfunction!(loads, m)?)?;
     m.add_function(wrap_pyfunction!(dumps, m)?)?;
+    m.add_function(wrap_pyfunction!(stream, m)?)?;
+    m.add_function(wrap_pyfunction!(stream_at, m)?)?;
+    m.add_function(wrap_pyfunction!(dumps_header, m)?)?;
+    m.add_function(wrap_pyfunction!(dumps_row, m)?)?;
     Ok(())
 }
 
 pub fn register_tsv(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_class::<CsvStream>()?;
     m.add_function(wrap_pyfunction!(loads_tsv, m)?)?;
     m.add_function(wrap_pyfunction!(dumps_tsv, m)?)?;
+    m.add_function(wrap_pyfunction!(stream_tsv, m)?)?;
+    m.add_function(wrap_pyfunction!(stream_at_tsv, m)?)?;
+    m.add_function(wrap_pyfunction!(dumps_header_tsv, m)?)?;
+    m.add_function(wrap_pyfunction!(dumps_row_tsv, m)?)?;
     Ok(())
 }

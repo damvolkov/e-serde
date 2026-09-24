@@ -1,4 +1,4 @@
-"""Public facade — the whole library is six functions with json-module semantics.
+"""Public facade — the whole library is twelve functions with json-module semantics.
 
 `loads`/`dumps` operate on `bytes | str | Path`; `load`/`dump` operate on files
 (`Path` or open binary handles); `*`-prefixed async twins offload both I/O and GIL-free
@@ -9,10 +9,11 @@ native decoding to worker threads. Passing `type=` decodes the plain tree throug
 from __future__ import annotations
 
 from asyncio import to_thread
-from collections.abc import Callable, Sequence
+from collections.abc import AsyncIterable, Callable, Sequence
 from functools import cache
+from itertools import islice
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, BinaryIO, get_args
+from typing import TYPE_CHECKING, Any, BinaryIO, NamedTuple, get_args
 
 import msgspec
 
@@ -20,12 +21,14 @@ from eserde.backends.registry import CodecRegistry, default_registry
 from eserde.infra.errors import FormatError, LoadError
 from eserde.infra.formats import Format, coerce_format, detect_format, sniff_format
 from eserde.infra.io import aread_bytes, aread_handle, awrite_bytes
+from eserde.infra.protocols import StreamingCodec
 from eserde.logic.embed import DEFAULT_EMBED_KEYS
 from eserde.logic.embed import embed as embed_tree
 from eserde.logic.encoder import Default, Encoders, encode
 
 if TYPE_CHECKING:
     import builtins
+    from collections.abc import AsyncIterator, Iterable, Iterator
 
 type Source = bytes | str | Path
 type Target = str | Path | BinaryIO
@@ -33,6 +36,122 @@ type FormatLike = Format | str
 type ObjectHook = Callable[[dict[str, Any]], Any]
 type DecHook = Callable[[Any, Any], Any]
 type Embed = Sequence[str] | bool
+
+
+_STREAM_BATCH = 1024
+
+
+def iloads(
+    source: Source,
+    *,
+    format: FormatLike | None = None,
+    registry: CodecRegistry = default_registry,
+) -> Iterator[Any]:
+    """Iterate records from a streamed document: CSV/TSV rows, NDJSON lines.
+
+    One record materialized at a time; `Path` sources are opened by the reader,
+    never read whole. Type claims follow the streaming contract of each format
+    (CSV types cells per-value, not per-column; see `docs/formats`).
+    """
+    return _plan_stream(source, format, registry).records()
+
+
+def idumps(
+    obj: Iterable[Any],
+    *,
+    format: FormatLike = Format.JSON,
+    registry: CodecRegistry = default_registry,
+) -> Iterator[bytes]:
+    """Iterate encoded chunks, one record at a time; concatenating them is the document."""
+    return _stream_codec(coerce_format(format), registry).iterdumps(obj)
+
+
+def ailoads(
+    source: Source,
+    *,
+    format: FormatLike | None = None,
+    registry: CodecRegistry = default_registry,
+) -> AsyncIterator[Any]:
+    """Async variant of `iloads`: batches drained off the event loop, eager validation."""
+    return _drain_reads(_plan_stream(source, format, registry))
+
+
+def aidumps(
+    obj: Iterable[Any] | AsyncIterable[Any],
+    *,
+    format: FormatLike = Format.JSON,
+    registry: CodecRegistry = default_registry,
+) -> AsyncIterator[bytes]:
+    """Async variant of `idumps`; `obj` may be a sync or async iterable."""
+    return _drain_writes(_stream_codec(coerce_format(format), registry), obj)
+
+
+class _StreamPlan(NamedTuple):
+    codec: StreamingCodec
+    data: bytes | None
+    path: Path | None
+
+    def records(self) -> Iterator[Any]:
+        match self.path, self.data:
+            case Path() as path, _:
+                return self.codec.iterload_path(path)
+            case _, bytes() as data:
+                return self.codec.iterloads(data)
+            case _:
+                msg = "stream plan carries neither data nor path"
+                raise FormatError(msg)
+
+
+def _plan_stream(source: Source, format: FormatLike | None, registry: CodecRegistry) -> _StreamPlan:
+    match source:
+        case Path():
+            return _StreamPlan(_stream_codec(_path_format(source, format), registry), None, source)
+        case bytes():
+            return _StreamPlan(_stream_codec(_require_or_sniff(format, source), registry), source, None)
+        case str():
+            data = source.encode("utf-8")
+            return _StreamPlan(_stream_codec(_require_or_sniff(format, data), registry), data, None)
+        case _:
+            msg = f"unsupported source type {type(source).__name__!r}"
+            raise FormatError(msg)
+
+
+def _stream_codec(fmt: Format, registry: CodecRegistry) -> StreamingCodec:
+    codec = registry.get(fmt)
+    if not isinstance(codec, StreamingCodec):
+        streamable = " · ".join(
+            sorted(f.value for f in registry.formats() if isinstance(registry.get(f), StreamingCodec))
+        )
+        msg = f"{fmt.value} does not support streaming — iloads/idumps speak {streamable}; materialize whole documents with loads/dumps"
+        raise FormatError(msg)
+    return codec
+
+
+def _read_batch(iterator: Iterator[Any]) -> list[Any]:
+    return list(islice(iterator, _STREAM_BATCH))
+
+
+def _encode_batch(codec: StreamingCodec, records: list[Any]) -> list[bytes]:
+    return list(codec.iterdumps(records))
+
+
+async def _drain_reads(plan: _StreamPlan) -> AsyncIterator[Any]:
+    iterator = plan.records()
+    while batch := await to_thread(_read_batch, iterator):
+        for record in batch:
+            yield record
+
+
+async def _drain_writes(codec: StreamingCodec, obj: Iterable[Any] | AsyncIterable[Any]) -> AsyncIterator[bytes]:
+    if isinstance(obj, AsyncIterable):
+        async for record in obj:
+            for chunk in await to_thread(_encode_batch, codec, [record]):
+                yield chunk
+        return
+    iterator = codec.iterdumps(obj)
+    while batch := await to_thread(_read_batch, iterator):
+        for chunk in batch:
+            yield chunk
 
 
 def _embed_keys(embed: Embed) -> tuple[str, ...]:

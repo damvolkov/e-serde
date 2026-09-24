@@ -29,6 +29,7 @@ class Feature(StrEnum):
     MERGE_KEYS = auto()
     BOM_TOLERANT = auto()
     MERGE_DUP_SECTIONS = auto()
+    STREAM = auto()
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,14 +50,14 @@ STANDARDS: Mapping[Format, Standard] = MappingProxyType(
             engine="msgspec.json",
             crate="msgspec",
             version="0.21",
-            features=_F({Feature.NULL, Feature.BIGNUM}),
+            features=_F({Feature.NULL, Feature.BIGNUM, Feature.STREAM}),
         ),
         Format.JSONC: Standard(
             spec="Deno jsonc: JSON + comments + trailing commas",
             engine="jsonc-parser",
             crate="jsonc-parser",
             version="0.33",
-            features=_F({Feature.NULL, Feature.BIGNUM, Feature.COMMENTS, Feature.TRAILING_COMMAS}),
+            features=_F({Feature.NULL, Feature.BIGNUM, Feature.COMMENTS, Feature.TRAILING_COMMAS, Feature.STREAM}),
         ),
         Format.YAML: Standard(
             spec="YAML 1.2 core schema, plus the 1.1 merge key",
@@ -94,14 +95,14 @@ STANDARDS: Mapping[Format, Standard] = MappingProxyType(
             engine="csv",
             crate="csv",
             version="1.4",
-            features=_F({Feature.NULL, Feature.NONFINITE, Feature.BIGNUM, Feature.BOM_TOLERANT}),
+            features=_F({Feature.NULL, Feature.NONFINITE, Feature.BIGNUM, Feature.BOM_TOLERANT, Feature.STREAM}),
         ),
         Format.TSV: Standard(
             spec="RFC 4180 dialect: tab-delimited",
             engine="csv",
             crate="csv",
             version="1.4",
-            features=_F({Feature.NULL, Feature.NONFINITE, Feature.BIGNUM, Feature.BOM_TOLERANT}),
+            features=_F({Feature.NULL, Feature.NONFINITE, Feature.BIGNUM, Feature.BOM_TOLERANT, Feature.STREAM}),
         ),
     }
 )

@@ -17,7 +17,7 @@ from eserde.infra.errors import (
 )
 from eserde.infra.formats import Format
 from eserde.infra.standards import STANDARDS, Feature
-from eserde.logic.api import adump, adumps, aload, aloads, dump, dumps, load, loads
+from eserde.logic.api import adump, adumps, aidumps, ailoads, aload, aloads, dump, dumps, idumps, iloads, load, loads
 
 try:
     __version__: str = version("e-serde")
@@ -38,11 +38,15 @@ __all__ = [
     "__version__",
     "adump",
     "adumps",
+    "aidumps",
+    "ailoads",
     "aload",
     "aloads",
     "default_registry",
     "dump",
     "dumps",
+    "idumps",
+    "iloads",
     "load",
     "loads",
 ]
