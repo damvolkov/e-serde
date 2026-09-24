@@ -69,13 +69,13 @@ async def test_loads_typed_ini_into_nested_model() -> None:
 
 
 async def test_loads_bytes_without_format_raises() -> None:
-    with pytest.raises(FormatError):
-        loads(b"{}")
+    with pytest.raises(FormatError, match="cannot infer"):
+        loads(b"k: 1")
 
 
 async def test_loads_str_without_format_raises() -> None:
-    with pytest.raises(FormatError):
-        loads("{}")
+    with pytest.raises(FormatError, match="cannot infer"):
+        loads("k: 1")
 
 
 async def test_loads_unsupported_source_type_raises() -> None:
@@ -259,3 +259,34 @@ async def test_loads_unknown_class_keeps_msgspec_rejection() -> None:
 
     with pytest.raises(LoadError):
         loads(b'{"x": 1}', format=Format.JSON, type=_Opaque)
+
+
+async def test_load_accepts_str_path(tmp_path: Path) -> None:
+    (tmp_path / "doc.json").write_text('{"a": 1}', "utf-8")
+    assert load(str(tmp_path / "doc.json")) == {"a": 1}
+
+
+async def test_format_accepts_plain_names(tmp_path: Path) -> None:
+    (tmp_path / "doc.bin").write_bytes(b'{"a": 1}')
+    assert load(tmp_path / "doc.bin", format="json") == {"a": 1}
+    assert dumps({"a": 1}, format="json") == b'{"a":1}'
+
+
+async def test_loads_json_object_sniffed() -> None:
+    assert loads(b'{"k": [1, 2]}') == {"k": [1, 2]}
+    assert loads('{"k": 1}') == {"k": 1}
+
+
+async def test_sniffed_json_failure_carries_hint() -> None:
+    with pytest.raises(LoadError, match="sniffed"):
+        loads(b'{"broken": ')
+
+
+async def test_aload_accepts_str_path(tmp_path: Path) -> None:
+    (tmp_path / "doc.toml").write_text("k = 1\n", "utf-8")
+    assert await aload(str(tmp_path / "doc.toml")) == {"k": 1}
+
+
+async def test_adump_accepts_str_path(tmp_path: Path) -> None:
+    await adump({"a": 1}, str(tmp_path / "out.jsonc"))
+    assert (tmp_path / "out.jsonc").read_bytes() == b'{"a":1}'

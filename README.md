@@ -32,14 +32,16 @@ from eserde import Format
 from pathlib import Path
 ```
 
-Six functions, `json` semantics, keyword-only options. `bytes`/`str` sources name the
-format; a `Path` autodetects from its suffix — `.json .jsonc .yaml .yml .toml .ini .cfg .conf .csv .tsv`.
+Six functions, `json` semantics, keyword-only options. Files are named by `Path` or
+plain string path and inferred from the suffix (`.json .jsonc .yaml .yml .toml .ini .cfg
+.conf .csv .tsv`); `format=` accepts a `Format` member or its name (`"json"`); pure JSON
+content sniffs itself, and everything else must declare its format.
 
 | Function | Input | Output |
 | --- | --- | --- |
 | `loads` | `bytes \| str \| Path` | plain tree — or the model in `type=` |
 | `dumps` | any object | `bytes` |
-| `load` | `Path \| BinaryIO` | like `loads` |
+| `load` | `str \| Path \| BinaryIO` | like `loads` |
 | `dump` | object → file | `None` |
 | `aloads` · `adumps` · `aload` · `adump` | same | awaitables of the same |
 
@@ -63,7 +65,7 @@ net = eserde.loads(src, type=Net, dec_hook=lambda t, v: t(v))  # custom fields i
 
 | kwarg | effect |
 | --- | --- |
-| `format=` | required for `bytes`/`str`; inferred from a `Path` |
+| `format=` | a `Format` member or its name; inferred from a path, sniffed from pure JSON, required otherwise |
 | `type=` | validate into a Struct, dataclass, TypedDict, attrs or pydantic model; violations raise `LoadError` |
 | `strict=False` | msgspec coercion — the escape hatch INI needs |
 | `object_hook=` | rewrite every decoded mapping, innermost first (json semantics) |

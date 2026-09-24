@@ -25,10 +25,10 @@ from pathlib import Path
 ## loads — decode
 
 ```python
-cfg = eserde.loads(b'{"host": "0.0.0.0", "port": 8080}', format=Format.JSON)
+cfg = eserde.loads(b'{"host": "0.0.0.0", "port": 8080}')  # pure JSON content sniffs itself
 # {'host': '0.0.0.0', 'port': 8080}
 
-eserde.loads('port: 8080', format=Format.YAML)     # a str source is fine — decoded as UTF-8
+eserde.loads('port: 8080', format="yaml")           # a str source is content; a plain format name works
 # {'port': 8080}
 ```
 
@@ -45,7 +45,7 @@ ini = eserde.loads(b"[svc]\nport = 8080\n", format=Format.INI,
 
 | kwarg | effect |
 | --- | --- |
-| `format=` | required for `bytes`/`str`; inferred from a `Path` |
+| `format=` | a `Format` member or its name; inferred from a path, sniffed from pure JSON, required otherwise |
 | `type=` | validate into a Struct, dataclass, TypedDict, attrs or pydantic model |
 | `strict=False` | msgspec coercion — the escape hatch INI needs |
 | `object_hook=` | rewrite every decoded mapping, innermost first (json semantics) |

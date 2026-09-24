@@ -18,7 +18,7 @@ import msgspec
 
 from eserde.backends.registry import CodecRegistry, default_registry
 from eserde.infra.errors import FormatError, LoadError
-from eserde.infra.formats import Format, detect_format
+from eserde.infra.formats import Format, coerce_format, detect_format, sniff_format
 from eserde.infra.io import aread_bytes, aread_handle, awrite_bytes
 from eserde.logic.embed import DEFAULT_EMBED_KEYS
 from eserde.logic.embed import embed as embed_tree
@@ -28,7 +28,8 @@ if TYPE_CHECKING:
     import builtins
 
 type Source = bytes | str | Path
-type Target = Path | BinaryIO
+type Target = str | Path | BinaryIO
+type FormatLike = Format | str
 type ObjectHook = Callable[[dict[str, Any]], Any]
 type DecHook = Callable[[Any, Any], Any]
 type Embed = Sequence[str] | bool
@@ -52,7 +53,7 @@ def _embed_root(root: str | Path | None, base: Path | None) -> Path:
 def loads(
     source: Source,
     *,
-    format: Format | None = None,
+    format: FormatLike | None = None,
     type: builtins.type[Any] | None = None,
     strict: bool = True,
     registry: CodecRegistry = default_registry,
@@ -63,15 +64,16 @@ def loads(
 ) -> Any:
     """Decode `source` into native Python objects, or into `type` when a schema is given.
 
-    Auto-detects `format` from `Path` extensions; `bytes`/`str` sources require it.
-    `object_hook` post-processes every decoded mapping (json semantics); `dec_hook`
-    teaches `type=` about custom fields (msgspec semantics).
+    `format` accepts a `Format` member or its plain name; `Path` sources infer it from
+    the extension, and JSON-object-shaped `bytes`/`str` may sniff it — anything else
+    must declare it. `object_hook` post-processes every decoded mapping (json
+    semantics); `dec_hook` teaches `type=` about custom fields (msgspec semantics).
     `embed` inlines references: `True` resolves `source:` keys against the document's
     directory (or `root=`), a sequence names the keys to treat as `.md` references.
     """
     fmt, data, base = _resolve(source, format, "loads")
     keys = _embed_keys(embed)
-    tree = registry.get(fmt).loads(data)
+    tree = _decode_sniffed(registry, fmt, data, sniffed=format is None and not isinstance(source, Path))
     if keys:
         tree = embed_tree(tree, keys, _embed_root(root, base))
     return _finalize(tree, type=type, strict=strict, object_hook=object_hook, dec_hook=dec_hook)
@@ -80,7 +82,7 @@ def loads(
 def dumps(
     obj: Any,
     *,
-    format: Format = Format.JSON,
+    format: FormatLike = Format.JSON,
     registry: CodecRegistry = default_registry,
     default: Default | None = None,
     encoders: Encoders | None = None,
@@ -89,13 +91,13 @@ def dumps(
 
     `encoders`/`default` customize the normalization per call, json/orjson semantics.
     """
-    return registry.get(format).dumps(encode(obj, default=default, encoders=encoders))
+    return registry.get(coerce_format(format)).dumps(encode(obj, default=default, encoders=encoders))
 
 
 def load(
     target: Target,
     *,
-    format: Format | None = None,
+    format: FormatLike | None = None,
     type: builtins.type[Any] | None = None,
     strict: bool = True,
     registry: CodecRegistry = default_registry,
@@ -104,7 +106,7 @@ def load(
     embed: Embed = False,
     root: str | Path | None = None,
 ) -> Any:
-    """Decode a file (`Path` or open binary handle). Same contract as `json.load`."""
+    """Decode a file (path as `str` or `Path`, or an open binary handle)."""
     fmt, data, base = _resolve_file(target, format)
     keys = _embed_keys(embed)
     tree = registry.get(fmt).loads(data)
@@ -117,12 +119,13 @@ def dump(
     obj: Any,
     target: Target,
     *,
-    format: Format | None = None,
+    format: FormatLike | None = None,
     registry: CodecRegistry = default_registry,
     default: Default | None = None,
     encoders: Encoders | None = None,
 ) -> None:
-    """Encode `obj` straight into a file. Format inferred from `Path`; handles require it."""
+    """Encode `obj` straight into a file. Format inferred from the path; handles require it."""
+    target = Path(target) if isinstance(target, str) else target
     data = dumps(obj, format=_target_format(target, format), registry=registry, default=default, encoders=encoders)
     if isinstance(target, Path):
         target.write_bytes(data)
@@ -133,7 +136,7 @@ def dump(
 async def aloads(
     source: Source,
     *,
-    format: Format | None = None,
+    format: FormatLike | None = None,
     type: builtins.type[Any] | None = None,
     strict: bool = True,
     registry: CodecRegistry = default_registry,
@@ -148,7 +151,7 @@ async def aloads(
     else:
         fmt, data, base = _resolve(source, format, "loads")
     keys = _embed_keys(embed)
-    tree = await to_thread(registry.get(fmt).loads, data)
+    tree = await to_thread(_decode_sniffed, registry, fmt, data, sniffed=format is None)
     if keys:
         tree = await to_thread(embed_tree, tree, keys, _embed_root(root, base))
     return await to_thread(_finalize, tree, type=type, strict=strict, object_hook=object_hook, dec_hook=dec_hook)
@@ -157,20 +160,20 @@ async def aloads(
 async def adumps(
     obj: Any,
     *,
-    format: Format = Format.JSON,
+    format: FormatLike = Format.JSON,
     registry: CodecRegistry = default_registry,
     default: Default | None = None,
     encoders: Encoders | None = None,
 ) -> bytes:
     """Async variant of `dumps`."""
     plain = await to_thread(encode, obj, default=default, encoders=encoders)
-    return await to_thread(registry.get(format).dumps, plain)
+    return await to_thread(registry.get(coerce_format(format)).dumps, plain)
 
 
 async def aload(
     target: Target,
     *,
-    format: Format | None = None,
+    format: FormatLike | None = None,
     type: builtins.type[Any] | None = None,
     strict: bool = True,
     registry: CodecRegistry = default_registry,
@@ -180,6 +183,7 @@ async def aload(
     root: str | Path | None = None,
 ) -> Any:
     """Async variant of `load`."""
+    target = Path(target) if isinstance(target, str) else target
     fmt, data, base = (
         (_path_format(target, format), await aread_bytes(target), target.parent)
         if isinstance(target, Path)
@@ -196,12 +200,13 @@ async def adump(
     obj: Any,
     target: Target,
     *,
-    format: Format | None = None,
+    format: FormatLike | None = None,
     registry: CodecRegistry = default_registry,
     default: Default | None = None,
     encoders: Encoders | None = None,
 ) -> None:
     """Async variant of `dump`."""
+    target = Path(target) if isinstance(target, str) else target
     data = await adumps(
         obj, format=_target_format(target, format), registry=registry, default=default, encoders=encoders
     )
@@ -211,20 +216,43 @@ async def adump(
         await to_thread(target.write, data)
 
 
-def _resolve(source: Source, format: Format | None, _op: str) -> tuple[Format, bytes, Path | None]:
+def _resolve(source: Source, format: FormatLike | None, _op: str) -> tuple[Format, bytes, Path | None]:
     match source:
         case Path():
             return _path_format(source, format), source.read_bytes(), source.parent
         case bytes():
-            return _require_format(format, "bytes"), source, None
+            return _require_or_sniff(format, source), source, None
         case str():
-            return _require_format(format, "str"), source.encode("utf-8"), None
+            data = source.encode("utf-8")
+            return _require_or_sniff(format, data), data, None
         case _:
             msg = f"unsupported source type {type(source).__name__!r}"
             raise FormatError(msg)
 
 
-def _resolve_file(target: Target, format: Format | None) -> tuple[Format, bytes, Path | None]:
+def _require_or_sniff(format: FormatLike | None, data: bytes) -> Format:
+    if format is not None:
+        return coerce_format(format)
+    sniffed = sniff_format(data)
+    if sniffed is None:
+        msg = f"cannot infer format from content — pass format= ({' · '.join(Format)})"
+        raise FormatError(msg)
+    return sniffed
+
+
+def _decode_sniffed(registry: CodecRegistry, fmt: Format, data: bytes, *, sniffed: bool) -> Any:
+    try:
+        return registry.get(fmt).loads(data)
+    except LoadError as exc:
+        if sniffed:
+            msg = f"{exc} — the format was sniffed from content; pass format= explicitly if this is not JSON"
+            raise LoadError(msg) from exc
+        raise
+
+
+def _resolve_file(target: Target, format: FormatLike | None) -> tuple[Format, bytes, Path | None]:
+    if isinstance(target, str):
+        target = Path(target)
     if isinstance(target, Path):
         return _path_format(target, format), target.read_bytes(), target.parent
     return _require_format(format, "file handle"), target.read(), None
@@ -289,23 +317,23 @@ def _adapter(type_: Any) -> Any:
     return TypeAdapter(type_)
 
 
-def _path_format(path: Path, format: Format | None) -> Format:
+def _path_format(path: Path, format: FormatLike | None) -> Format:
     if format is not None:
-        return format
+        return coerce_format(format)
     if (detected := detect_format(path)) is None:
         msg = f"cannot detect format from path {path.name!r}"
         raise FormatError(msg)
     return detected
 
 
-def _target_format(target: Target, format: Format | None) -> Format:
-    if isinstance(target, Path):
-        return _path_format(target, format)
+def _target_format(target: Target, format: FormatLike | None) -> Format:
+    if isinstance(target, (Path, str)):
+        return _path_format(Path(target), format)
     return _require_format(format, "file handle")
 
 
-def _require_format(format: Format | None, source_kind: str) -> Format:
+def _require_format(format: FormatLike | None, source_kind: str) -> Format:
     if format is None:
         msg = f"format must be specified for {source_kind} source"
         raise FormatError(msg)
-    return format
+    return coerce_format(format)

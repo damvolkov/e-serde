@@ -30,8 +30,8 @@ def dumps(
     encoders: Mapping[type, Callable[[Any], Any]] | None = None,
 ) -> bytes: ...
 
-def load(target: Path | BinaryIO, *, ...) -> Any: ...        # like loads, file input
-def dump(obj: Any, target: Path | BinaryIO, *, ...) -> None: ...   # like dumps, file output
+def load(target: str | Path | BinaryIO, *, ...) -> Any: ...        # like loads, file input
+def dump(obj: Any, target: str | Path | BinaryIO, *, ...) -> None: ...   # like dumps, file output
 
 # async twins — identical signatures, offloaded I/O and parsing
 def aloads(...) -> Awaitable[Any]: ...
@@ -44,7 +44,7 @@ def adump(...) -> Awaitable[None]: ...
 
 | Parameter | Applies to | Effect |
 | --- | --- | --- |
-| `format` | all | required for `bytes`/`str` sources and handles; inferred from a `Path` suffix |
+| `format` | all | a `Format` member or its name (`"json"`); inferred from a path suffix, sniffed from pure JSON content, required otherwise |
 | `type` | decode | routes the plain tree through `msgspec.convert` into a Struct, dataclass, TypedDict or attrs class; pydantic models and generics (`list[M]`, `dict[str, M]`) are detected and validated through a lazily imported, cached `TypeAdapter`. Decoding stays Rust/C; validation is msgspec's or pydantic's. Violations raise `LoadError` either way |
 | `strict` | decode | `False` opts into msgspec coercion — the escape hatch INI needs |
 | `object_hook` | decode | rewrites each decoded mapping bottom-up, json semantics |
@@ -70,8 +70,10 @@ class Format(StrEnum):
     JSON; JSONC; YAML; TOML; INI
 ```
 
-`detect_format(path)` maps `.json .jsonc .yaml .yml .toml .ini .cfg .conf` → `Format`,
-or returns `None`.
+`detect_format(path)` maps `.json .jsonc .yaml .yml .toml .ini .cfg .conf .csv .tsv`
+→ `Format`, or returns `None`. `sniff_format(data)` answers only where content leaves no
+doubt (JSON objects, with or without comments); `coerce_format` accepts a member or name.
+`load`/`dump`/`aload`/`adump` take the target as `str`, `Path` or binary handle.
 
 ## Errors
 
