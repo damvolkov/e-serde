@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from pathlib import Path
+from typing import Any
 
 import msgspec
 import pytest
@@ -11,9 +12,6 @@ from eserde.infra.errors import FormatError, LoadError
 from eserde.infra.formats import Format
 from eserde.logic import embed as embed_mod
 from eserde.logic.api import aload, aloads, dumps, load, loads
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 
 @pytest.fixture
@@ -168,3 +166,26 @@ async def test_aload_handle_needs_root(docs: Path) -> None:
 def test_nonstring_under_key_walks_through(docs: Path) -> None:
     out = loads('{"source": {"nested": true}}', format=Format.JSON, embed=True, root=docs)
     assert out == {"source": {"nested": True}}
+
+
+RESOURCES = Path(__file__).resolve().parents[3] / "resources"
+
+
+def test_fixture_reference_untouched_without_embed() -> None:
+    doc = load(RESOURCES / "sample_embed.json")
+    assert doc["content"] == {"source": "./content/sample_embed.md"}
+
+
+def test_fixture_embeds_companion_markdown() -> None:
+    doc = load(RESOURCES / "sample_embed.json", embed=True)
+    body = (RESOURCES / "content" / "sample_embed.md").read_text("utf-8")
+    assert doc["content"]["source"] == body
+    assert doc["content"]["source"].startswith("# Guía de instalación")
+    assert "日本語" in doc["content"]["source"]
+
+
+def test_fixture_embedding_leaves_rest_of_tree_intact() -> None:
+    embedded = load(RESOURCES / "sample_embed.json", embed=True)
+    plain = load(RESOURCES / "sample.json")
+    rest = {k: v for k, v in embedded.items() if k != "content"}
+    assert rest == plain
