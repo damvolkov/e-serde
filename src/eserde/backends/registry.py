@@ -26,8 +26,9 @@ class CodecRegistry:
 
     __slots__ = ("_codecs",)
 
-    def __init__(self) -> None:
-        self._codecs: dict[Format, Codec] = {}
+    def __init__(self, codecs: dict[Format, Codec] | None = None) -> None:
+        """Seed from a `Format → Codec` mapping (default wiring uses it directly); empty otherwise."""
+        self._codecs: dict[Format, Codec] = dict(codecs or {})
 
     def register(self, codec: Codec, *, format: Format | None = None, override: bool = False) -> None:
         """Bind `codec` to a format. Defaults to `codec.format`; raises if already bound unless `override`."""
@@ -74,10 +75,7 @@ _DEFAULT_CODECS: tuple[Codec, ...] = (
 
 def build_default_registry() -> CodecRegistry:
     """Fresh registry wired to the default backends: msgspec (C) for JSON, native Rust for the rest."""
-    registry = CodecRegistry()
-    for codec in _DEFAULT_CODECS:
-        registry.register(codec)
-    return registry
+    return CodecRegistry({codec.format: codec for codec in _DEFAULT_CODECS})
 
 
 default_registry = build_default_registry()

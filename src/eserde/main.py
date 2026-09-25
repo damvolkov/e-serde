@@ -10,10 +10,9 @@ from eserde.infra.formats import Format
 
 
 def main() -> None:
-    sys.stdout.write(f"e-serde {__version__}\n")
-    for fmt in Format:
-        codec = default_registry.get(fmt)
-        sys.stdout.write(f"  {fmt.value:<5} -> {type(codec).__name__}\n")
+    """Emit the version line and one row per registered format naming its active backend."""
+    rows = (f"  {fmt.value:<5} -> {type(default_registry.get(fmt)).__name__}\n" for fmt in Format)
+    sys.stdout.write(f"e-serde {__version__}\n" + "".join(rows))
 
 
 if __name__ == "__main__":

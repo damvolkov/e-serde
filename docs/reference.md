@@ -1,6 +1,6 @@
 # Reference
 
-The complete public surface: six functions plus async twins, one shared option set,
+The complete public surface: twelve functions — whole-document and streaming, each with an async twin — over one shared option set,
 keyword arguments enforced.
 
 ```python
@@ -62,7 +62,7 @@ def aidumps(...) -> AsyncIterator[bytes]: ...   # like idumps; obj may be async
 | `embed` | decode | `True` inlines `source:`-style `.md` references; a sequence names the keys; `root=` anchors relative paths |
 | `default` | encode | last resort for unknown types, json/orjson semantics |
 | `encoders` | encode | `Mapping[type, Callable]` intercepted by exact type ahead of every built-in; results are re-walked |
-| `registry` | all | a `CodecRegistry` mapping each `Format` to its codec; `default_registry` ships the five built-ins — pass a custom one to swap engines without touching call sites |
+| `registry` | all | a `CodecRegistry` mapping each `Format` to its codec; `default_registry` ships the seven built-ins — pass a custom one to swap engines without touching call sites |
 
 `encode.register` remains available for library-wide type rules.
 

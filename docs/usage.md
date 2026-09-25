@@ -1,6 +1,6 @@
 # Usage
 
-Six functions with `json`-module semantics and keyword-only options. `loads`/`dumps` are
+Twelve functions with `json`-module semantics and keyword-only options: whole-document (`loads`/`dumps`), streamed (`iloads`/`idumps`), and async twins of each. The core pair is
 in-memory; `load`/`dump` take files; every function has an async twin prefixed with `a`.
 
 | Function | Input | Output |
