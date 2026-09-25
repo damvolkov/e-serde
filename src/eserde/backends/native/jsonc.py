@@ -14,8 +14,6 @@ from eserde.infra.formats import Format
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator
-
-if TYPE_CHECKING:
     from pathlib import Path
 
 

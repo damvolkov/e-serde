@@ -20,7 +20,6 @@ import msgspec
 from eserde.backends.registry import CodecRegistry, default_registry
 from eserde.infra.errors import FormatError, LoadError
 from eserde.infra.formats import Format, coerce_format, detect_format, sniff_format
-from eserde.infra.io import aread_bytes, aread_handle, awrite_bytes
 from eserde.infra.protocols import StreamingCodec
 from eserde.logic.embed import DEFAULT_EMBED_KEYS
 from eserde.logic.embed import embed as embed_tree
@@ -274,19 +273,19 @@ async def aloads(
     embed: Embed = False,
     root: str | Path | None = None,
 ) -> Any:
-    """Async variant of `loads`. Path reads, embedding and native parsing off the event loop."""
-    match source:
-        case Path():
-            fmt, data, base = _path_format(source, format), await aread_bytes(source), source.parent
-        case _:
-            fmt, data, base = _resolve(source, format)
-    keys = _embed_keys(embed)
-    tree = await to_thread(
-        _decode_sniffed, registry, fmt, data, sniffed=format is None and not isinstance(source, Path)
+    """Async variant of `loads`: the whole sync pipeline runs off the event loop."""
+    return await to_thread(
+        loads,
+        source,
+        format=format,
+        type=type,
+        strict=strict,
+        registry=registry,
+        object_hook=object_hook,
+        dec_hook=dec_hook,
+        embed=embed,
+        root=root,
     )
-    if keys:
-        tree = await to_thread(embed_tree, tree, keys, _embed_root(root, base))
-    return await to_thread(_finalize, tree, type=type, strict=strict, object_hook=object_hook, dec_hook=dec_hook)
 
 
 async def adumps(
@@ -298,8 +297,7 @@ async def adumps(
     encoders: Encoders | None = None,
 ) -> bytes:
     """Async variant of `dumps`."""
-    plain = await to_thread(encode, obj, default=default, encoders=encoders)
-    return await to_thread(registry.get(coerce_format(format)).dumps, plain)
+    return await to_thread(dumps, obj, format=format, registry=registry, default=default, encoders=encoders)
 
 
 async def aload(
@@ -314,18 +312,19 @@ async def aload(
     embed: Embed = False,
     root: str | Path | None = None,
 ) -> Any:
-    """Async variant of `load`."""
-    match target:
-        case str() | Path() as name:
-            path = Path(name)
-            fmt, data, base = _path_format(path, format), await aread_bytes(path), path.parent
-        case _:
-            fmt, data, base = _require_format(format, "file handle"), await aread_handle(target), None
-    keys = _embed_keys(embed)
-    tree = await to_thread(registry.get(fmt).loads, data)
-    if keys:
-        tree = await to_thread(embed_tree, tree, keys, _embed_root(root, base))
-    return await to_thread(_finalize, tree, type=type, strict=strict, object_hook=object_hook, dec_hook=dec_hook)
+    """Async variant of `load`: the whole sync pipeline runs off the event loop."""
+    return await to_thread(
+        load,
+        target,
+        format=format,
+        type=type,
+        strict=strict,
+        registry=registry,
+        object_hook=object_hook,
+        dec_hook=dec_hook,
+        embed=embed,
+        root=root,
+    )
 
 
 async def adump(
@@ -337,15 +336,8 @@ async def adump(
     default: Default | None = None,
     encoders: Encoders | None = None,
 ) -> None:
-    """Async variant of `dump`."""
-    data = await adumps(
-        obj, format=_target_format(target, format), registry=registry, default=default, encoders=encoders
-    )
-    match target:
-        case str() | Path() as name:
-            await awrite_bytes(Path(name), data)
-        case _:
-            await to_thread(target.write, data)
+    """Async variant of `dump`: the whole sync pipeline runs off the event loop."""
+    await to_thread(dump, obj, target, format=format, registry=registry, default=default, encoders=encoders)
 
 
 def _resolve(source: Source, format: FormatLike | None) -> tuple[Format, bytes, Path | None]:

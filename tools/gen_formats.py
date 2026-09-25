@@ -84,7 +84,7 @@ def snippet(fmt: Format) -> str:
 index = [
     "# Formats",
     "",
-    "e-serde speaks five config formats through five pinned engines. Each page states the **spec**",
+    "e-serde speaks every format through its own pinned engine. Each page states the **spec**",
     "implemented, the **engine** behind it — exact version, enforced against the lockfiles by the",
     "test-suite — and the **capabilities** that can be relied on.",
     "",

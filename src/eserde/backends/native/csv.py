@@ -19,27 +19,21 @@ from eserde.infra.errors import LoadError
 from eserde.infra.formats import Format
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Iterator
+    from collections.abc import Callable, Iterable, Iterator
     from pathlib import Path
 
 
 class _NativeCsvStreaming(NativeCodec):
     """Shared streaming surface: record-at-a-time iteration over the `csv` crate."""
 
-    def iterloads(self, data: bytes) -> Iterator[Any]:
-        return self._guarded(self._create(lambda: self.backend.stream(data)))
-
-    def iterload_path(self, path: Path) -> Iterator[Any]:
-        return self._guarded(self._create(lambda: self.backend.stream_at(str(path))))
-
-    def _create(self, open_stream: Any) -> Iterator[Any]:
+    def _common_create(self, open_stream: Callable[[], Iterator[Any]]) -> Iterator[Any]:
         try:
             return open_stream()
         except ValueError as exc:
             msg = f"{self.format.value} decode failed: {exc}"
             raise LoadError(msg) from exc
 
-    def _guarded(self, rows: Iterator[Any]) -> Iterator[Any]:
+    def _common_guard(self, rows: Iterator[Any]) -> Iterator[Any]:
         while True:
             try:
                 row = next(rows)
@@ -49,6 +43,14 @@ class _NativeCsvStreaming(NativeCodec):
                 msg = f"{self.format.value} decode failed: {exc}"
                 raise LoadError(msg) from exc
             yield row
+
+    ############################################################
+
+    def iterloads(self, data: bytes) -> Iterator[Any]:
+        return self._common_guard(self._common_create(lambda: self.backend.stream(data)))
+
+    def iterload_path(self, path: Path) -> Iterator[Any]:
+        return self._common_guard(self._common_create(lambda: self.backend.stream_at(str(path))))
 
     def iterdumps(self, obj: Iterable[Any]) -> Iterator[bytes]:
         rows = iter(obj)

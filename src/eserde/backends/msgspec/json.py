@@ -23,6 +23,11 @@ class MsgspecJsonCodec:
 
     format: ClassVar[Format] = Format.JSON
 
+    def _common_lines(self, lines: Iterable[bytes]) -> Iterator[Any]:
+        return (self.loads(line) for line in lines if line.strip())
+
+    ############################################################
+
     def loads(self, data: bytes) -> Any:
         try:
             return msgspec.json.decode(data)
@@ -38,15 +43,12 @@ class MsgspecJsonCodec:
             raise DumpError(msg) from exc
 
     def iterloads(self, data: bytes) -> Iterator[Any]:
-        return self._iter_lines(data.splitlines())
+        return self._common_lines(data.splitlines())
 
     def iterload_path(self, path: Path) -> Iterator[Any]:
         with path.open("rb") as handle:
-            yield from self._iter_lines(handle)
+            yield from self._common_lines(handle)
 
     def iterdumps(self, obj: Iterable[Any]) -> Iterator[bytes]:
         for record in obj:
             yield self.dumps(record) + b"\n"
-
-    def _iter_lines(self, lines: Iterable[bytes]) -> Iterator[Any]:
-        return (self.loads(line) for line in lines if line.strip())

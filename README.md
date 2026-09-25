@@ -32,7 +32,7 @@ from eserde import Format
 from pathlib import Path
 ```
 
-Six functions, `json` semantics, keyword-only options. Files are named by `Path` or
+Twelve functions — load/dump whole documents or stream them record by record, in sync and async — with `json` semantics and keyword-only options. Files are named by `Path` or
 plain string path and inferred from the suffix (`.json .jsonc .yaml .yml .toml .ini .cfg
 .conf .csv .tsv`); `format=` accepts a `Format` member or its name (`"json"`); pure JSON
 content sniffs itself, and everything else must declare its format.

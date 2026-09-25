@@ -8,7 +8,7 @@ a family of local-first, production-grade components. e-serde is its serializati
 Python has never lacked config loaders; it lacks a *fast, type-safe, uniform* one. The
 usual options are either a pure-Python parser that is easy but slow, or a fast C/Rust
 codec that is quick but format-specific and typing-optional. Choosing formats means
-choosing five different APIs and five different failure modes.
+choosing a different API and a different failure mode per format.
 
 e-serde's thesis: take the **speed and robustness of C and Rust** — the same engines
 that already power the fastest JSON and TOML libraries — and put them behind one

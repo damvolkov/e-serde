@@ -55,9 +55,11 @@ def dumps(
         )
     tree = encode(obj, default=default)
     native = not ensure_ascii and indent is None and not sort_keys and separators in (None, (",", ":"))
-    if native:
-        return serde_dumps(tree, format=Format.JSON).decode("utf-8")
-    return json.dumps(tree, ensure_ascii=ensure_ascii, indent=indent, separators=separators, sort_keys=sort_keys)
+    return (
+        serde_dumps(tree, format=Format.JSON).decode("utf-8")
+        if native
+        else json.dumps(tree, ensure_ascii=ensure_ascii, indent=indent, separators=separators, sort_keys=sort_keys)
+    )
 
 
 def loads(
