@@ -8,6 +8,10 @@ This file is maintained automatically: the release workflow appends the notes of
 every tagged version, and a CI test fails if the head of this file ever disagrees
 with `Cargo.toml`.
 
+## [0.5.1] — 2026-09-25
+
+- style: taxonomy pass — privates first with rule, _common_ genealogy, typed factory; docs count 6→12 and five→every (#32)
+
 ## [0.5.0] — 2026-09-24
 
 - style(logic): match-case dispatch in stream/embed resolvers per house law
