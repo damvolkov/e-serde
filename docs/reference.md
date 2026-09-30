@@ -59,7 +59,7 @@ def aidumps(...) -> AsyncIterator[bytes]: ...   # like idumps; obj may be async
 | `strict` | decode | `False` opts into msgspec coercion — the escape hatch INI needs |
 | `object_hook` | decode | rewrites each decoded mapping bottom-up, json semantics |
 | `dec_hook` | decode | `(type, value) -> Any` custom field types inside `type=`; without `type=` raises `FormatError` |
-| `embed` | decode | `True` inlines `source:`-style `.md` references; a sequence names the keys; `root=` anchors relative paths |
+| `embed` | decode | `True` inlines `source:`-style references — `.md` as text, structured files decoded through `registry` into trees, recursively; a sequence names the keys; `root=` anchors and confines paths |
 | `default` | encode | last resort for unknown types, json/orjson semantics |
 | `encoders` | encode | `Mapping[type, Callable]` intercepted by exact type ahead of every built-in; results are re-walked |
 | `registry` | all | a `CodecRegistry` mapping each `Format` to its codec; `default_registry` ships the seven built-ins — pass a custom one to swap engines without touching call sites |

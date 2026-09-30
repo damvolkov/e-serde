@@ -73,7 +73,7 @@ net = eserde.loads(src, type=Net, dec_hook=lambda t, v: t(v))  # custom fields i
 | `object_hook=` | rewrite every decoded mapping, innermost first (json semantics) |
 | `dec_hook=` | teach `type=` custom field types (requires `type=`) |
 | `registry=` | swap the default codec set |
-| `embed=` | inline `source:`-style references to plain `.md` files, root-confined |
+| `embed=` | inline `source:`-style references — `.md` as text, JSON/YAML/TOML/INI/CSV files as decoded trees, recursive, root-confined |
 
 ### dumps — encode
 
@@ -98,7 +98,6 @@ Every input is normalized through the Jsonable encoder first (datetime → ISO,
 | `encoders=` | exact-type hooks, ahead of every built-in; results are re-walked |
 | `default=` | json/orjson-style last resort for unknown types; none → `EncoderError` |
 | `registry=` | swap the default codec set |
-| `embed=` | inline `source:`-style references to plain `.md` files, root-confined |
 
 ### load / dump — files
 
@@ -223,7 +222,7 @@ make bench               # rival benchmark matrix → assets/benchmarks/*.png
 
 Interop landed: `eserde` is a custom encoder for any framework that ducks-types `json`
 (`eserde.compat`), validates `pydantic`/`attrs` models through `type=`, accepts
-per-call `default=`/`encoders=`/`dec_hook=` hooks, inlines Markdown bodies (`embed=`),
+per-call `default=`/`encoders=`/`dec_hook=` hooks, inlines Markdown bodies and structured sub-documents (`embed=`),
 and streams records one at a time (`iloads`/`idumps` and async twins). Shipped alongside
 a comparative concurrency stress harness (`make stress`).
 

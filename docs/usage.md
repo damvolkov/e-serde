@@ -180,14 +180,17 @@ Under `type=list[MyStruct]` the inferred records convert directly.
 
 ## embed — content references
 
-A document can index prose instead of holding it:
+A document can index content instead of holding it — prose as Markdown, configuration as
+sub-documents in any supported format:
 
 ```yaml
 # doc.yaml
 title: Guía de instalación
 content:
   format: markdown
-  source: ./content/guia.md      # a real .md file, resolved at load
+  source: ./content/guia.md      # a real .md file, inlined as text
+database:
+  source: ./config/db.toml       # a structured file, decoded and inlined as a tree
 ```
 
 ```python
@@ -195,14 +198,24 @@ import eserde
 from pathlib import Path
 
 doc = eserde.loads(Path("doc.yaml"), embed=True)
-doc["content"]["source"]  # the full text of content/guia.md
+doc["content"]["source"]   # the full text of content/guia.md
+doc["database"]["source"]  # {'host': 'localhost', 'port': 5432}
 ```
 
-`embed=True` resolves every `source` key; `embed=("path", "body")` names the keys. References
-must point at plain `.md` files, are resolved against the document's own directory (or `root=`
-for `bytes`/`str` sources) and confined inside it — `../` and absolute escapes raise `LoadError`.
-A sibling `format:` must say `markdown`. The embedding is copy-on-write and all-or-nothing: a
-broken reference never returns a half-built tree. Works in every format and in the async twins.
+`embed=True` resolves every `source` key; `embed=("path", "body")` names the keys. The
+extension decides the treatment: `.md` inlines as text; `.json`, `.jsonc`, `.yaml`/`.yml`,
+`.toml`, `.ini`, `.csv`, `.tsv` decode through the same `registry=` codecs as the top
+document (native Rust, msgspec for JSON) and inline as trees. Anything else raises `LoadError`.
+
+Sub-documents are embedded recursively with the same keys: their references resolve against
+their own directory, so a fragment stays portable wherever it is included. Every path, at
+any depth, stays confined inside the root — the top document's directory, or `root=` for
+`bytes`/`str` sources — so `../` and absolute escapes raise `LoadError`. A reference to a
+document already being embedded is a cycle and raises; the same fragment included from two
+branches is fine. A sibling `format:` is optional; when present it must agree with the file
+(`markdown`, `yaml`, `toml`, …). The embedding is copy-on-write and all-or-nothing: a broken
+reference at any depth never returns a half-built tree. Works in every format, under
+`type=`, and in the async twins.
 
 ## object_hook and dec_hook
 
