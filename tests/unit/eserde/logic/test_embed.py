@@ -130,6 +130,12 @@ def test_bytes_source_without_root_raises() -> None:
         loads(b'{"source": "x.md"}', format=Format.JSON, embed=True)
 
 
+def test_crlf_markdown_inlines_with_lf(docs: Path) -> None:
+    (docs / "crlf.md").write_bytes(b"a\r\nb\r\n")
+    out = loads('{"source": "crlf.md"}', format=Format.JSON, embed=True, root=docs)
+    assert out["source"] == "a\nb\n"
+
+
 def test_embedded_text_is_not_reprocessed(docs: Path) -> None:
     (docs / "content" / "evil.md").write_text('{"source": "content/guia.md"}', "utf-8")
     (docs / "content" / "holder.md").write_text("source: content/evil.md", "utf-8")
@@ -359,7 +365,7 @@ class _StubYaml:
 def test_sub_documents_decode_through_given_registry(tmp_path: Path) -> None:
     registry = build_default_registry()
     registry.replace(Format.YAML, _StubYaml())
-    (tmp_path / "sub.yaml").write_text("k: 1\n", "utf-8")
+    (tmp_path / "sub.yaml").write_bytes(b"k: 1\n")
     out = loads(b'{"source": "sub.yaml"}', format=Format.JSON, embed=True, root=tmp_path, registry=registry)
     assert out == {"source": {"stub": 5}}
 

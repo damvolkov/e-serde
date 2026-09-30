@@ -62,12 +62,12 @@ def _inline(reference: str, parent: dict[str, Any], scope: _Scope) -> Any:
     if (declared := parent.get("format")) is not None and declared != kind:
         msg = f"reference {reference!r} is {kind}, but its sibling format declares {declared!r}"
         raise LoadError(msg)
-    data = _read(path, reference, scope)
+    _check(path, reference, scope)
     match kind:
         case Format() as fmt:
-            return _nested(fmt, data, path, reference, scope)
+            return _nested(fmt, path, reference, scope)
         case _:
-            return _text(data, reference)
+            return _text(path, reference)
 
 
 def _kind(path: Path, reference: str) -> Format | str:
@@ -82,36 +82,32 @@ def _kind(path: Path, reference: str) -> Format | str:
             raise LoadError(msg)
 
 
-def _read(path: Path, reference: str, scope: _Scope) -> bytes:
+def _check(path: Path, reference: str, scope: _Scope) -> None:
     if not path.is_file():
         msg = f"embedded file not found: {reference!r} (base {scope.base})"
         raise LoadError(msg)
     if path.stat().st_size > MAX_EMBED_BYTES:
         msg = f"embedded file too large (> {MAX_EMBED_BYTES} bytes): {reference!r}"
         raise LoadError(msg)
+
+
+def _text(path: Path, reference: str) -> str:
+    """Markdown reads in text mode: universal newlines, so CRLF files inline as `\\n` everywhere."""
     try:
-        return path.read_bytes()
-    except OSError as exc:
+        return path.read_text("utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
         msg = f"cannot embed {reference!r}: {exc}"
         raise LoadError(msg) from exc
 
 
-def _text(data: bytes, reference: str) -> str:
-    try:
-        return data.decode("utf-8")
-    except UnicodeDecodeError as exc:
-        msg = f"cannot embed {reference!r}: {exc}"
-        raise LoadError(msg) from exc
-
-
-def _nested(fmt: Format, data: bytes, path: Path, reference: str, scope: _Scope) -> Any:
+def _nested(fmt: Format, path: Path, reference: str, scope: _Scope) -> Any:
     """Decode through the registry's codec, then embed the sub-tree relative to its own directory."""
     if path in scope.chain:
         msg = f"embedding cycle: {reference!r} is already being embedded"
         raise LoadError(msg)
     try:
-        tree = scope.registry.get(fmt).loads(data)
-    except LoadError as exc:
+        tree = scope.registry.get(fmt).loads(path.read_bytes())
+    except (OSError, LoadError) as exc:
         msg = f"cannot embed {reference!r}: {exc}"
         raise LoadError(msg) from exc
     return _walk(tree, scope._replace(base=path.parent, chain=scope.chain | {path}))
