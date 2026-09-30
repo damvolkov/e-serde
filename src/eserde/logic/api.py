@@ -197,13 +197,14 @@ def loads(
     must declare it. `object_hook` post-processes every decoded mapping (json
     semantics); `dec_hook` teaches `type=` about custom fields (msgspec semantics).
     `embed` inlines references: `True` resolves `source:` keys against the document's
-    directory (or `root=`), a sequence names the keys to treat as `.md` references.
+    directory (or `root=`), a sequence names the keys to treat as references — `.md`
+    files inline as text, structured files decode through `registry` and embed as trees.
     """
     fmt, data, base = _resolve(source, format)
     keys = _embed_keys(embed)
     tree = _decode_sniffed(registry, fmt, data, sniffed=format is None and not isinstance(source, Path))
     if keys:
-        tree = embed_tree(tree, keys, _embed_root(root, base))
+        tree = embed_tree(tree, keys, _embed_root(root, base), registry)
     return _finalize(tree, type=type, strict=strict, object_hook=object_hook, dec_hook=dec_hook)
 
 
@@ -239,7 +240,7 @@ def load(
     keys = _embed_keys(embed)
     tree = registry.get(fmt).loads(data)
     if keys:
-        tree = embed_tree(tree, keys, _embed_root(root, base))
+        tree = embed_tree(tree, keys, _embed_root(root, base), registry)
     return _finalize(tree, type=type, strict=strict, object_hook=object_hook, dec_hook=dec_hook)
 
 
