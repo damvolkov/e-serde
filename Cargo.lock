@@ -78,7 +78,7 @@ dependencies = [
 
 [[package]]
 name = "e-serde-native"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "csv",
  "jsonc-parser",

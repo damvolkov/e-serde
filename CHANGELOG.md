@@ -8,6 +8,10 @@ This file is maintained automatically: the release workflow appends the notes of
 every tagged version, and a CI test fails if the head of this file ever disagrees
 with `Cargo.toml`.
 
+## [0.6.1] — 2026-10-02
+
+- feat(interpolate): compose-spec ${VAR:-default} expansion over decoded trees, native Rust (#37)
+
 ## [0.6.0] — 2026-09-30
 
 - feat(embed): structured sub-documents, recursive, via the codec registry (#35)
