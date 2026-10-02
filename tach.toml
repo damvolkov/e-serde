@@ -42,7 +42,7 @@ depends_on = ["eserde._native", "eserde.infra"]
 
 [[modules]]
 path = "eserde.logic"
-depends_on = ["eserde.backends", "eserde.infra"]
+depends_on = ["eserde._native", "eserde.backends", "eserde.infra"]
 
 # Layers (optional) — ordered high → low. A layer may import lower layers
 # freely; importing a higher layer fails. Assign via `layer` on each module.

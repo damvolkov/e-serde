@@ -21,6 +21,7 @@ def loads(
     dec_hook: Callable[[Any, Any], Any] | None = None,
     embed: Sequence[str] | bool = False,
     root: str | Path | None = None,
+    interpolate: Mapping[str, str] | bool = False,
 ) -> Any: ...
 
 def dumps(
@@ -60,6 +61,7 @@ def aidumps(...) -> AsyncIterator[bytes]: ...   # like idumps; obj may be async
 | `object_hook` | decode | rewrites each decoded mapping bottom-up, json semantics |
 | `dec_hook` | decode | `(type, value) -> Any` custom field types inside `type=`; without `type=` raises `FormatError` |
 | `embed` | decode | `True` inlines `source:`-style references — `.md` as text, structured files decoded through `registry` into trees, recursively; a sequence names the keys; `root=` anchors and confines paths |
+| `interpolate` | decode | expands compose-spec `${VAR:-default}` in string values (native Rust) before `embed`; `True` reads the process environment, a mapping supplies the variables |
 | `default` | encode | last resort for unknown types, json/orjson semantics |
 | `encoders` | encode | `Mapping[type, Callable]` intercepted by exact type ahead of every built-in; results are re-walked |
 | `registry` | all | a `CodecRegistry` mapping each `Format` to its codec; `default_registry` ships the seven built-ins — pass a custom one to swap engines without touching call sites |

@@ -1,6 +1,7 @@
 mod convert;
 mod csv;
 mod ini;
+mod interpolate;
 mod jsonc;
 mod toml;
 mod yaml;
@@ -26,5 +27,6 @@ fn _native(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
         register(&submodule)?;
         m.add_submodule(&submodule)?;
     }
+    m.add_function(wrap_pyfunction!(interpolate::interpolate, m)?)?;
     Ok(())
 }
