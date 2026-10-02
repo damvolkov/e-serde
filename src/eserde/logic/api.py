@@ -9,7 +9,7 @@ native decoding to worker threads. Passing `type=` decodes the plain tree throug
 from __future__ import annotations
 
 from asyncio import to_thread
-from collections.abc import AsyncIterable, Callable, Sequence
+from collections.abc import AsyncIterable, Callable, Mapping, Sequence
 from functools import cache
 from itertools import islice
 from pathlib import Path
@@ -24,6 +24,7 @@ from eserde.infra.protocols import StreamingCodec
 from eserde.logic.embed import DEFAULT_EMBED_KEYS
 from eserde.logic.embed import embed as embed_tree
 from eserde.logic.encoder import Default, Encoders, encode
+from eserde.logic.interpolate import interpolate as interpolate_tree
 
 if TYPE_CHECKING:
     import builtins
@@ -35,6 +36,7 @@ type FormatLike = Format | str
 type ObjectHook = Callable[[dict[str, Any]], Any]
 type DecHook = Callable[[Any, Any], Any]
 type Embed = Sequence[str] | bool
+type Interpolate = Mapping[str, str] | bool
 
 
 _STREAM_BATCH = 1024
@@ -166,6 +168,17 @@ def _embed_keys(embed: Embed) -> tuple[str, ...]:
             return tuple(embed)
 
 
+def _interpolate(tree: Any, interpolate: Interpolate) -> Any:
+    """`False` → untouched, `True` → process environment, a mapping → those variables."""
+    match interpolate:
+        case False:
+            return tree
+        case True:
+            return interpolate_tree(tree)
+        case _:
+            return interpolate_tree(tree, interpolate)
+
+
 def _embed_root(root: str | Path | None, base: Path | None) -> Path:
     """`root=` wins; otherwise anchor on the source's directory; otherwise refuse loudly."""
     match root, base:
@@ -189,6 +202,7 @@ def loads(
     dec_hook: DecHook | None = None,
     embed: Embed = False,
     root: str | Path | None = None,
+    interpolate: Interpolate = False,
 ) -> Any:
     """Decode `source` into native Python objects, or into `type` when a schema is given.
 
@@ -199,10 +213,14 @@ def loads(
     `embed` inlines references: `True` resolves `source:` keys against the document's
     directory (or `root=`), a sequence names the keys to treat as references — `.md`
     files inline as text, structured files decode through `registry` and embed as trees.
+    `interpolate` expands compose-style `${VAR:-default}` in string values before
+    embedding: `True` reads the process environment, a mapping supplies the variables.
     """
     fmt, data, base = _resolve(source, format)
     keys = _embed_keys(embed)
-    tree = _decode_sniffed(registry, fmt, data, sniffed=format is None and not isinstance(source, Path))
+    tree = _interpolate(
+        _decode_sniffed(registry, fmt, data, sniffed=format is None and not isinstance(source, Path)), interpolate
+    )
     if keys:
         tree = embed_tree(tree, keys, _embed_root(root, base), registry)
     return _finalize(tree, type=type, strict=strict, object_hook=object_hook, dec_hook=dec_hook)
@@ -234,11 +252,12 @@ def load(
     dec_hook: DecHook | None = None,
     embed: Embed = False,
     root: str | Path | None = None,
+    interpolate: Interpolate = False,
 ) -> Any:
     """Decode a file (path as `str` or `Path`, or an open binary handle)."""
     fmt, data, base = _resolve_file(target, format)
     keys = _embed_keys(embed)
-    tree = registry.get(fmt).loads(data)
+    tree = _interpolate(registry.get(fmt).loads(data), interpolate)
     if keys:
         tree = embed_tree(tree, keys, _embed_root(root, base), registry)
     return _finalize(tree, type=type, strict=strict, object_hook=object_hook, dec_hook=dec_hook)
@@ -273,6 +292,7 @@ async def aloads(
     dec_hook: DecHook | None = None,
     embed: Embed = False,
     root: str | Path | None = None,
+    interpolate: Interpolate = False,
 ) -> Any:
     """Async variant of `loads`: the whole sync pipeline runs off the event loop."""
     return await to_thread(
@@ -286,6 +306,7 @@ async def aloads(
         dec_hook=dec_hook,
         embed=embed,
         root=root,
+        interpolate=interpolate,
     )
 
 
@@ -312,6 +333,7 @@ async def aload(
     dec_hook: DecHook | None = None,
     embed: Embed = False,
     root: str | Path | None = None,
+    interpolate: Interpolate = False,
 ) -> Any:
     """Async variant of `load`: the whole sync pipeline runs off the event loop."""
     return await to_thread(
@@ -325,6 +347,7 @@ async def aload(
         dec_hook=dec_hook,
         embed=embed,
         root=root,
+        interpolate=interpolate,
     )
 
 

@@ -32,3 +32,5 @@ tsv: _CsvModule
 toml: _FormatModule
 jsonc: _FormatModule
 ini: _FormatModule
+
+def interpolate(tree: Any, env: dict[str, str]) -> Any: ...

@@ -217,6 +217,32 @@ branches is fine. A sibling `format:` is optional; when present it must agree wi
 reference at any depth never returns a half-built tree. Works in every format, under
 `type=`, and in the async twins.
 
+## interpolate — compose-style variables
+
+Docker compose files carry `${VAR:-default}` in their values; `interpolate=` expands them
+after decoding, so the tree holds what compose would see:
+
+```yaml
+# compose.yaml
+services:
+  vllm:
+    ports:
+      - "${VLLM_PORT:-8000}:8000"
+```
+
+```python
+eserde.load("compose.yaml", interpolate=True)                  # process environment
+eserde.load("compose.yaml", interpolate={"VLLM_PORT": "8100"})  # explicit variables
+```
+
+The full compose grammar: `$VAR`, `${VAR}`, `${VAR:-default}` / `${VAR-default}` (unset or
+empty / unset), `${VAR:?err}` / `${VAR?err}` (required), `${VAR:+alt}` / `${VAR+alt}`, `$$`
+for a literal `$`, and nested operands (`${A:-${B}}`), evaluated lazily. Only string values
+expand — keys and non-string scalars pass through, and values stay strings. An unset
+variable without a default becomes `""`, as in compose; malformed syntax and failed `:?`
+requirements raise `LoadError`. Expansion runs before `embed`, so references can be
+parametrized. Works in every format and in the async twins.
+
 ## object_hook and dec_hook
 
 `object_hook` post-processes every decoded mapping (innermost first, json semantics).
