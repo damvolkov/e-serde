@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/eserde-banner.svg" width="520" alt="e-serde">
+  <img src="assets/logo.svg" width="220" alt="e-serde">
 </p>
 
 <p align="center">
