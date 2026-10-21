@@ -1,12 +1,12 @@
 <p align="center">
-  <img src="assets/logo.svg" width="220" alt="e-serde">
-</p>
-
-<p align="center">
   <a href="https://github.com/damvolkov/e-serde/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/damvolkov/e-serde/ci.yml?label=test" alt="CI"></a>
   <a href="https://pypi.org/project/e-serde/"><img src="https://img.shields.io/pypi/v/e-serde?color=166b7e" alt="PyPI"></a>
   <a href="https://pypi.org/project/e-serde/"><img src="https://img.shields.io/pypi/pyversions/e-serde" alt="Python"></a>
   <a href="LICENSE"><img src="https://img.shields.io/pypi/l/e-serde?color=166b7e" alt="License"></a>
+</p>
+
+<p align="center">
+  <img src="assets/logo.svg" alt="e-serde" height="110" />
 </p>
 
 Universal structured-data loader: native **Rust** codecs that decode any popular config
